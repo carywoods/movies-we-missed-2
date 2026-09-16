@@ -11,6 +11,7 @@ from .auth import cookie_header, create_session, ensure_admin, load_session, rea
 from .config import Config
 from .member import MemberMixin
 from .interests import InterestMixin
+from .comments import CommentMixin
 from .db import connect, initialize
 from .views import movie_grid, page, pagination, search_form
 
@@ -42,7 +43,7 @@ class Response:
 Handler = Callable[[Request], Response]
 
 
-class Application(MemberMixin, InterestMixin):
+class Application(MemberMixin, InterestMixin, CommentMixin):
     def __init__(self, config: Config):
         self.config = config
         initialize(config)
@@ -57,6 +58,7 @@ class Application(MemberMixin, InterestMixin):
         }
         self.routes.update(self.member_routes())
         self.routes.update(self.interest_routes())
+        self.routes.update(self.comment_routes())
 
     def html(self, title: str, content: str, **kwargs) -> Response:
         return Response(page(self.config, title, content, **kwargs).encode(), content_type="text/html; charset=utf-8")
@@ -134,6 +136,7 @@ class Application(MemberMixin, InterestMixin):
         year = f' <span class="meta">({movie["release_year"]})</span>' if movie["release_year"] else ""
         chips = "".join(f'<a href="/genres/{x["slug"]}">{x["name"]}</a>' for x in genres) + "".join(f'<a href="/collections/{x["slug"]}">{x["name"]}</a>' for x in collections)
         content = f'<article class="detail"><p class="meta">MOVIE</p><h1>{movie["title"]}{year}</h1><p>{movie["synopsis"] or "A movie waiting to be rediscovered and discussed."}</p><div class="chips">{chips}</div></article>'
+        content += f'<p><a href="/movies/{slug}/comments">Join the discussion</a></p>'
         return self.html(movie["title"], content, description=movie["synopsis"] or f'Discover {movie["title"]} at Movies We Missed.', canonical=f'/movies/{slug}')
 
     def taxonomy_detail(self, table: str, join_table: str, foreign_key: str, path: str, slug: str) -> Response:
@@ -180,7 +183,7 @@ class Application(MemberMixin, InterestMixin):
             token = fresh_token
         request.session, request.member, request.session_token = session, member, token
         handler = self.routes.get((request.method, request.path))
-        response = handler(request) if handler else self.dispatch_interest(request) or self.dispatch_dynamic(request) or Response(b"Not found", 404)
+        response = handler(request) if handler else self.dispatch_comments(request) or self.dispatch_interest(request) or self.dispatch_dynamic(request) or Response(b"Not found", 404)
         if fresh_token and not any(name.lower() == "set-cookie" for name, _ in response.headers):
             response.headers = (*response.headers, cookie_header(self.config, fresh_token))
         phrase = HTTPStatus(response.status).phrase
