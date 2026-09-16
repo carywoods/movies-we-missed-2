@@ -22,3 +22,11 @@ Run resumed on 2026-09-16 from the existing Stage 1 repository state.
 - Added a dependency-free WSGI application, configuration-backed startup, database initialization, routing, and `GET /health`.
 - Server binds on `0.0.0.0` and uses the configured `PORT`.
 - Added direct WSGI route tests.
+
+## Stage 3 — Movie inventory importer
+
+- Status: complete
+- Added deterministic CSV ingestion with educational exclusion, filename/title/year normalization, source-category provenance, cross-category deduplication, and review quarantine.
+- `new` is stored as inventory status; `soft` is included and adult-labeled; `k and a` maps to Kids/Animation; `bc` maps to Black Cinema; `someday` maps to Better With a Couple of Beers at editorial confidence.
+- Raw filenames are retained for review, but source paths are stored only as SHA-256 fingerprints and are never exposed publicly.
+- Actual inventory validation: 1,625 rows, including 493 educational exclusions, 46 soft inclusions, 436 new-status rows, and 9 Kids/Animation rows.
