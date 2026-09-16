@@ -17,6 +17,7 @@ from .commerce import CommerceMixin
 from .sponsors import SponsorMixin
 from .newsletter import NewsletterMixin
 from .analytics import AnalyticsMixin
+from .seo import SeoMixin
 from .db import connect, initialize
 from .views import movie_grid, page, pagination, search_form
 
@@ -48,7 +49,7 @@ class Response:
 Handler = Callable[[Request], Response]
 
 
-class Application(MemberMixin, InterestMixin, CommentMixin, ScreeningMixin, CommerceMixin, SponsorMixin, NewsletterMixin, AnalyticsMixin):
+class Application(MemberMixin, InterestMixin, CommentMixin, ScreeningMixin, CommerceMixin, SponsorMixin, NewsletterMixin, AnalyticsMixin, SeoMixin):
     def __init__(self, config: Config):
         self.config = config
         initialize(config)
@@ -67,6 +68,7 @@ class Application(MemberMixin, InterestMixin, CommentMixin, ScreeningMixin, Comm
         self.routes.update(self.screening_routes())
         self.routes.update(self.newsletter_routes())
         self.routes.update(self.analytics_routes())
+        self.routes.update(self.seo_routes())
 
     def html(self, title: str, content: str, **kwargs) -> Response:
         return Response(page(self.config, title, content + self.sponsor_block(), **kwargs).encode(), content_type="text/html; charset=utf-8")
