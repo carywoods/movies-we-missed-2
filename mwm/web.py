@@ -7,7 +7,9 @@ from http import HTTPStatus
 from typing import Callable, Iterable
 from urllib.parse import parse_qs
 
+from .auth import cookie_header, create_session, ensure_admin, load_session, read_cookie
 from .config import Config
+from .member import MemberMixin
 from .db import connect, initialize
 from .views import movie_grid, page, pagination, search_form
 
@@ -18,6 +20,10 @@ class Request:
     path: str
     query: dict[str, list[str]]
     environ: dict
+    form: dict[str, str] | None = None
+    session: dict | None = None
+    member: dict | None = None
+    session_token: str | None = None
 
 
 @dataclass
@@ -35,10 +41,11 @@ class Response:
 Handler = Callable[[Request], Response]
 
 
-class Application:
+class Application(MemberMixin):
     def __init__(self, config: Config):
         self.config = config
         initialize(config)
+        ensure_admin(config)
         self.routes: dict[tuple[str, str], Handler] = {
             ("GET", "/health"): self.health,
             ("GET", "/"): self.home,
@@ -47,6 +54,7 @@ class Application:
             ("GET", "/collections"): self.collections,
             ("GET", "/static/site.css"): self.styles,
         }
+        self.routes.update(self.member_routes())
 
     def html(self, title: str, content: str, **kwargs) -> Response:
         return Response(page(self.config, title, content, **kwargs).encode(), content_type="text/html; charset=utf-8")
@@ -158,8 +166,21 @@ class Application:
             query=parse_qs(environ.get("QUERY_STRING", ""), keep_blank_values=True),
             environ=environ,
         )
+        length = min(int(environ.get("CONTENT_LENGTH") or 0), 64_000)
+        if request.method in {"POST", "PUT", "PATCH"}:
+            parsed = parse_qs(environ.get("wsgi.input").read(length).decode("utf-8", "replace"), keep_blank_values=True)
+            request.form = {key: values[-1] for key, values in parsed.items()}
+        token = read_cookie(environ.get("HTTP_COOKIE", ""))
+        session, member = load_session(self.config, token)
+        fresh_token = None
+        if not session:
+            fresh_token, session = create_session(self.config)
+            token = fresh_token
+        request.session, request.member, request.session_token = session, member, token
         handler = self.routes.get((request.method, request.path))
         response = handler(request) if handler else self.dispatch_dynamic(request) or Response(b"Not found", 404)
+        if fresh_token and not any(name.lower() == "set-cookie" for name, _ in response.headers):
+            response.headers = (*response.headers, cookie_header(self.config, fresh_token))
         phrase = HTTPStatus(response.status).phrase
         headers = [("Content-Type", response.content_type), ("Content-Length", str(len(response.body))), *response.headers]
         start_response(f"{response.status} {phrase}", headers)
