@@ -13,6 +13,7 @@ dependencies = []
 mwm-server = "mwm.__main__:main"
 mwm-import = "mwm.importer:main"
 mwm-backup = "mwm.backup:main"
+mwm-enrich = "mwm.enrichment:main"
 
 [tool.setuptools]
 packages = ["mwm"]
