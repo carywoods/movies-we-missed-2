@@ -36,6 +36,14 @@ class Config:
     @classmethod
     def from_env(cls) -> "Config":
         environment = os.getenv("APP_ENV", "development").strip().lower()
+        if environment not in {"development", "test", "production"}:
+            raise RuntimeError("APP_ENV must be development, test, or production")
+        try:
+            port = int(os.getenv("PORT", "8080"))
+        except ValueError as exc:
+            raise RuntimeError("PORT must be an integer") from exc
+        if not 1 <= port <= 65535:
+            raise RuntimeError("PORT must be between 1 and 65535")
         site_url = os.getenv("SITE_URL", "http://localhost:8080").rstrip("/")
         parsed = urlparse(site_url)
         if parsed.scheme not in {"http", "https"} or not parsed.netloc:
@@ -48,7 +56,7 @@ class Config:
         database_path = Path(os.getenv("DATABASE_PATH", "data/mwm.db")).expanduser()
         return cls(
             environment=environment,
-            port=int(os.getenv("PORT", "8080")),
+            port=port,
             site_url=site_url,
             database_path=database_path,
             session_secret=session_secret,
@@ -73,4 +81,3 @@ class Config:
     @property
     def email_enabled(self) -> bool:
         return self.email_provider != "disabled" and bool(self.email_api_key)
-

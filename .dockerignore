@@ -1,0 +1,12 @@
+.git
+.env*
+!.env.example
+data
+backups
+tests
+*.db*
+__pycache__
+.pytest_cache
+dist
+build
+*.egg-info
