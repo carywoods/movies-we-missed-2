@@ -15,3 +15,10 @@ Run resumed on 2026-09-16 from the existing Stage 1 repository state.
 
 - External providers default to disabled and will not block the application.
 - Approximate paid API consumption: $0.00 (no paid APIs called).
+
+## Stage 2 — Minimum runnable application
+
+- Status: complete
+- Added a dependency-free WSGI application, configuration-backed startup, database initialization, routing, and `GET /health`.
+- Server binds on `0.0.0.0` and uses the configured `PORT`.
+- Added direct WSGI route tests.
