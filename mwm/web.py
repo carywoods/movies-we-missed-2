@@ -16,6 +16,7 @@ from .screenings import ScreeningMixin
 from .commerce import CommerceMixin
 from .sponsors import SponsorMixin
 from .newsletter import NewsletterMixin
+from .analytics import AnalyticsMixin
 from .db import connect, initialize
 from .views import movie_grid, page, pagination, search_form
 
@@ -47,7 +48,7 @@ class Response:
 Handler = Callable[[Request], Response]
 
 
-class Application(MemberMixin, InterestMixin, CommentMixin, ScreeningMixin, CommerceMixin, SponsorMixin, NewsletterMixin):
+class Application(MemberMixin, InterestMixin, CommentMixin, ScreeningMixin, CommerceMixin, SponsorMixin, NewsletterMixin, AnalyticsMixin):
     def __init__(self, config: Config):
         self.config = config
         initialize(config)
@@ -65,6 +66,7 @@ class Application(MemberMixin, InterestMixin, CommentMixin, ScreeningMixin, Comm
         self.routes.update(self.comment_routes())
         self.routes.update(self.screening_routes())
         self.routes.update(self.newsletter_routes())
+        self.routes.update(self.analytics_routes())
 
     def html(self, title: str, content: str, **kwargs) -> Response:
         return Response(page(self.config, title, content + self.sponsor_block(), **kwargs).encode(), content_type="text/html; charset=utf-8")
@@ -192,6 +194,7 @@ class Application(MemberMixin, InterestMixin, CommentMixin, ScreeningMixin, Comm
         response = handler(request) if handler else self.dispatch_newsletter(request) or self.dispatch_sponsors(request) or self.dispatch_commerce(request) or self.dispatch_comments(request) or self.dispatch_screenings(request) or self.dispatch_interest(request) or self.dispatch_dynamic(request) or Response(b"Not found", 404)
         if fresh_token and not any(name.lower() == "set-cookie" for name, _ in response.headers):
             response.headers = (*response.headers, cookie_header(self.config, fresh_token))
+        self.track_response(request, response)
         phrase = HTTPStatus(response.status).phrase
         headers = [("Content-Type", response.content_type), ("Content-Length", str(len(response.body))), *response.headers]
         start_response(f"{response.status} {phrase}", headers)
