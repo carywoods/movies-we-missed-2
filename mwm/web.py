@@ -14,6 +14,7 @@ from .interests import InterestMixin
 from .comments import CommentMixin
 from .screenings import ScreeningMixin
 from .commerce import CommerceMixin
+from .sponsors import SponsorMixin
 from .db import connect, initialize
 from .views import movie_grid, page, pagination, search_form
 
@@ -45,7 +46,7 @@ class Response:
 Handler = Callable[[Request], Response]
 
 
-class Application(MemberMixin, InterestMixin, CommentMixin, ScreeningMixin, CommerceMixin):
+class Application(MemberMixin, InterestMixin, CommentMixin, ScreeningMixin, CommerceMixin, SponsorMixin):
     def __init__(self, config: Config):
         self.config = config
         initialize(config)
@@ -64,7 +65,7 @@ class Application(MemberMixin, InterestMixin, CommentMixin, ScreeningMixin, Comm
         self.routes.update(self.screening_routes())
 
     def html(self, title: str, content: str, **kwargs) -> Response:
-        return Response(page(self.config, title, content, **kwargs).encode(), content_type="text/html; charset=utf-8")
+        return Response(page(self.config, title, content + self.sponsor_block(), **kwargs).encode(), content_type="text/html; charset=utf-8")
 
     def db(self):
         return connect(self.config.database_path)
@@ -186,7 +187,7 @@ class Application(MemberMixin, InterestMixin, CommentMixin, ScreeningMixin, Comm
             token = fresh_token
         request.session, request.member, request.session_token = session, member, token
         handler = self.routes.get((request.method, request.path))
-        response = handler(request) if handler else self.dispatch_commerce(request) or self.dispatch_comments(request) or self.dispatch_screenings(request) or self.dispatch_interest(request) or self.dispatch_dynamic(request) or Response(b"Not found", 404)
+        response = handler(request) if handler else self.dispatch_sponsors(request) or self.dispatch_commerce(request) or self.dispatch_comments(request) or self.dispatch_screenings(request) or self.dispatch_interest(request) or self.dispatch_dynamic(request) or Response(b"Not found", 404)
         if fresh_token and not any(name.lower() == "set-cookie" for name, _ in response.headers):
             response.headers = (*response.headers, cookie_header(self.config, fresh_token))
         phrase = HTTPStatus(response.status).phrase
