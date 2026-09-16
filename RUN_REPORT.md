@@ -38,3 +38,4 @@ Run resumed on 2026-09-16 from the existing Stage 1 repository state.
 - Public pages use stable slug URLs and canonical metadata; adult-labeled records are excluded from anonymous catalog pages by default.
 - Added pagination and responsive CSS with route coverage tests.
 
+

@@ -10,6 +10,7 @@ from urllib.parse import parse_qs
 from .auth import cookie_header, create_session, ensure_admin, load_session, read_cookie
 from .config import Config
 from .member import MemberMixin
+from .interests import InterestMixin
 from .db import connect, initialize
 from .views import movie_grid, page, pagination, search_form
 
@@ -41,7 +42,7 @@ class Response:
 Handler = Callable[[Request], Response]
 
 
-class Application(MemberMixin):
+class Application(MemberMixin, InterestMixin):
     def __init__(self, config: Config):
         self.config = config
         initialize(config)
@@ -55,6 +56,7 @@ class Application(MemberMixin):
             ("GET", "/static/site.css"): self.styles,
         }
         self.routes.update(self.member_routes())
+        self.routes.update(self.interest_routes())
 
     def html(self, title: str, content: str, **kwargs) -> Response:
         return Response(page(self.config, title, content, **kwargs).encode(), content_type="text/html; charset=utf-8")
@@ -178,7 +180,7 @@ class Application(MemberMixin):
             token = fresh_token
         request.session, request.member, request.session_token = session, member, token
         handler = self.routes.get((request.method, request.path))
-        response = handler(request) if handler else self.dispatch_dynamic(request) or Response(b"Not found", 404)
+        response = handler(request) if handler else self.dispatch_interest(request) or self.dispatch_dynamic(request) or Response(b"Not found", 404)
         if fresh_token and not any(name.lower() == "set-cookie" for name, _ in response.headers):
             response.headers = (*response.headers, cookie_header(self.config, fresh_token))
         phrase = HTTPStatus(response.status).phrase
