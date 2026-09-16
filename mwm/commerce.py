@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from .mixins import AppMixin
+
 import re
 from html import escape
 from urllib.parse import parse_qsl, urlencode, urlparse, urlunparse
@@ -16,7 +18,7 @@ def amazon_affiliate_url(destination: str, tag: str) -> str:
     return urlunparse(parsed._replace(query=urlencode(query)))
 
 
-class CommerceMixin:
+class CommerceMixin(AppMixin):
     def dispatch_commerce(self, request):
         match = re.fullmatch(r"/out/merchandise/(\d+)", request.path)
         if not match or request.method != "GET":

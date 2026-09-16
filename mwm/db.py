@@ -8,7 +8,8 @@ from .config import Config
 
 
 ROOT = Path(__file__).resolve().parent.parent
-MIGRATIONS = ROOT / "migrations"
+PACKAGED_MIGRATIONS = Path(__file__).resolve().parent / "migrations"
+MIGRATIONS = PACKAGED_MIGRATIONS if PACKAGED_MIGRATIONS.exists() else ROOT / "migrations"
 
 
 def connect(path: Path | str) -> sqlite3.Connection:
@@ -104,4 +105,3 @@ def initialize(config: Config) -> list[str]:
 
 def rows(conn: sqlite3.Connection, sql: str, params: Iterable[object] = ()) -> list[sqlite3.Row]:
     return list(conn.execute(sql, tuple(params)))
-

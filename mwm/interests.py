@@ -1,11 +1,13 @@
 from __future__ import annotations
 
+from .mixins import AppMixin
+
 import re
 
 from .views import movie_grid
 
 
-class InterestMixin:
+class InterestMixin(AppMixin):
     def interest_routes(self):
         return {("GET", "/discover"): self.discovery}
 

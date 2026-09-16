@@ -8,6 +8,7 @@
 *.sqlite3
 data/
 backups/
+movie_inventory.csv
 __pycache__/
 *.py[cod]
 .pytest_cache/

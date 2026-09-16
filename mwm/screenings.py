@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from .mixins import AppMixin
+
 import re
 from html import escape
 
@@ -9,7 +11,7 @@ from .importer import slugify
 SCREENING_STATUSES = ("draft", "announced", "rsvp_open", "full", "completed", "cancelled")
 
 
-class ScreeningMixin:
+class ScreeningMixin(AppMixin):
     def screening_routes(self):
         return {
             ("GET", "/screenings"): self.screening_index,

@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+from .mixins import AppMixin
+
 import re
 from html import escape
 
 
-class CommentMixin:
+class CommentMixin(AppMixin):
     def comment_routes(self):
         return {("GET", "/admin/comments"): self.moderation_queue}
 

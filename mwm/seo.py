@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+from .mixins import AppMixin
+
 import json
 from html import escape
 
 
-class SeoMixin:
+class SeoMixin(AppMixin):
     def seo_routes(self):
         return {
             ("GET", "/sitemap.xml"): self.sitemap,

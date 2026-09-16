@@ -1,5 +1,6 @@
 from mwm.config import Config
 from mwm.web import create_app
+from mwm.db import MIGRATIONS
 from tests.web_client import request
 
 
@@ -23,3 +24,8 @@ def test_invalid_port_is_rejected(monkeypatch):
         assert "PORT" in str(exc)
     else:
         raise AssertionError("invalid port accepted")
+
+
+def test_migration_is_packaged_with_application():
+    assert (MIGRATIONS / "001_initial.sql").exists()
+    assert (MIGRATIONS / "001_initial.sql").read_text() == (__import__("pathlib").Path("migrations/001_initial.sql")).read_text()

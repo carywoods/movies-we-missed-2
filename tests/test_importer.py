@@ -14,12 +14,12 @@ def test_filename_normalization():
 def test_import_rules_and_path_privacy(tmp_path: Path, monkeypatch):
     inventory = tmp_path / "inventory.csv"
     rows = [
-        ("educational", "Course.2020.mp4", "/mnt/private/Course.2020.mp4"),
-        ("new", "Clueless.1995.720p.mp4", "/mnt/private/new/Clueless.1995.720p.mp4"),
-        ("bc", "Clueless.1995.other.mkv", "/mnt/private/bc/Clueless.1995.other.mkv"),
-        ("soft", "After Hours.2019.mp4", "/mnt/private/soft/After Hours.2019.mp4"),
-        ("k and a", "Toy Story.1995.mp4", "/mnt/private/k/Toy Story.1995.mp4"),
-        ("someday", "Road House.1989.mp4", "/mnt/private/someday/Road House.1989.mp4"),
+        ("educational", "Course.2020.mp4", "private://library/Course.2020.mp4"),
+        ("new", "Clueless.1995.720p.mp4", "private://library/new/Clueless.1995.720p.mp4"),
+        ("bc", "Clueless.1995.other.mkv", "private://library/bc/Clueless.1995.other.mkv"),
+        ("soft", "After Hours.2019.mp4", "private://library/soft/After Hours.2019.mp4"),
+        ("k and a", "Toy Story.1995.mp4", "private://library/k/Toy Story.1995.mp4"),
+        ("someday", "Road House.1989.mp4", "private://library/someday/Road House.1989.mp4"),
     ]
     with inventory.open("w", newline="") as output:
         writer = csv.writer(output)
@@ -40,7 +40,7 @@ def test_import_rules_and_path_privacy(tmp_path: Path, monkeypatch):
         assert db.execute("SELECT storage_status FROM movies WHERE title='Clueless'").fetchone()[0] == "new"
         assert db.execute("SELECT adult_content FROM movies WHERE title='After Hours'").fetchone()[0] == 1
         stored = " ".join(row[0] or "" for row in db.execute("SELECT path_fingerprint FROM movie_sources"))
-        assert "/mnt/" not in stored
+        assert "private://" not in stored
         assert db.execute("SELECT count(*) FROM movie_sources WHERE source_category='bc'").fetchone()[0] == 1
         assert db.execute("SELECT count(*) FROM movie_collections mc JOIN collections c ON c.id=mc.collection_id WHERE c.slug='better-with-a-couple-of-beers'").fetchone()[0] == 1
     finally:
@@ -48,6 +48,9 @@ def test_import_rules_and_path_privacy(tmp_path: Path, monkeypatch):
 
 
 def test_actual_inventory_import(tmp_path: Path, monkeypatch):
+    if not Path("movie_inventory.csv").exists():
+        import pytest
+        pytest.skip("private operator inventory is not checked into source control")
     monkeypatch.setenv("DATABASE_PATH", str(tmp_path / "actual.db"))
     report = import_inventory(Path("movie_inventory.csv"), Config.from_env())
     assert report.total_rows == 1625

@@ -1,11 +1,13 @@
 from __future__ import annotations
 
+from .mixins import AppMixin
+
 import re
 from html import escape
 from urllib.parse import urlparse
 
 
-class AdminMixin:
+class AdminMixin(AppMixin):
     def admin_routes(self):
         return {
             ("GET", "/admin"): self.admin_dashboard,

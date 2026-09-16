@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from .mixins import AppMixin
+
 import hashlib
 import json
 import re
@@ -10,7 +12,7 @@ from .emailer import EmailMessage, get_email_provider
 from .importer import slugify
 
 
-class NewsletterMixin:
+class NewsletterMixin(AppMixin):
     def newsletter_routes(self):
         return {
             ("GET", "/newsletter"): self.newsletter_signup_form,

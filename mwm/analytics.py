@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from .mixins import AppMixin
+
 import re
 from html import escape
 
@@ -22,7 +24,7 @@ TRACKED_EVENTS = (
 )
 
 
-class AnalyticsMixin:
+class AnalyticsMixin(AppMixin):
     def analytics_routes(self):
         return {("GET", "/admin/analytics"): self.analytics_dashboard}
 

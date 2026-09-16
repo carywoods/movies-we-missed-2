@@ -1,11 +1,13 @@
 from __future__ import annotations
 
+from .mixins import AppMixin
+
 import re
 from html import escape
 from urllib.parse import urlparse
 
 
-class SponsorMixin:
+class SponsorMixin(AppMixin):
     def dispatch_sponsors(self, request):
         match = re.fullmatch(r"/out/sponsor/(\d+)", request.path)
         if not match or request.method != "GET":

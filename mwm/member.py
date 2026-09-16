@@ -1,12 +1,14 @@
 from __future__ import annotations
 
+from .mixins import AppMixin
+
 import hmac
 from html import escape
 
 from .auth import cookie_header, create_session, destroy_session, hash_password, verify_password
 
 
-class MemberMixin:
+class MemberMixin(AppMixin):
     def member_routes(self):
         return {
             ("GET", "/register"): self.register_form,

@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import re
 from dataclasses import dataclass
+from html import escape
 from http import HTTPStatus
 from typing import Callable, Iterable
 from urllib.parse import parse_qs
@@ -132,7 +133,7 @@ class Application(MemberMixin, InterestMixin, CommentMixin, ScreeningMixin, Comm
             items = list(db.execute(f"SELECT * FROM {table} WHERE {where} ORDER BY name"))
         finally:
             db.close()
-        content = f'<h1>{title}</h1><div class="chips">' + "".join(f'<a href="{path}/{item["slug"]}">{item["name"]}</a>' for item in items) + "</div>"
+        content = f'<h1>{escape(title)}</h1><div class="chips">' + "".join(f'<a href="{path}/{item["slug"]}">{escape(item["name"])}</a>' for item in items) + "</div>"
         return self.html(title, content, canonical=path)
 
     def movie_detail(self, slug: str) -> Response:
@@ -147,7 +148,7 @@ class Application(MemberMixin, InterestMixin, CommentMixin, ScreeningMixin, Comm
             db.close()
         year = f' <span class="meta">({movie["release_year"]})</span>' if movie["release_year"] else ""
         chips = "".join(f'<a href="/genres/{x["slug"]}">{x["name"]}</a>' for x in genres) + "".join(f'<a href="/collections/{x["slug"]}">{x["name"]}</a>' for x in collections)
-        content = f'<article class="detail"><p class="meta">MOVIE</p><h1>{movie["title"]}{year}</h1><p>{movie["synopsis"] or "A movie waiting to be rediscovered and discussed."}</p><div class="chips">{chips}</div></article>'
+        content = f'<article class="detail"><p class="meta">MOVIE</p><h1>{escape(movie["title"])}{year}</h1><p>{escape(movie["synopsis"] or "A movie waiting to be rediscovered and discussed.")}</p><div class="chips">{chips}</div></article>'
         content += f'<p><a href="/movies/{slug}/comments">Join the discussion</a></p>' + self.commerce_panel(movie["id"])
         return self.html(movie["title"], content, description=movie["synopsis"] or f'Discover {movie["title"]} at Movies We Missed.', canonical=f'/movies/{slug}')
 
@@ -160,7 +161,7 @@ class Application(MemberMixin, InterestMixin, CommentMixin, ScreeningMixin, Comm
             movies = list(db.execute(f"SELECT m.* FROM movies m JOIN {join_table} j ON j.movie_id=m.id WHERE j.{foreign_key}=? AND m.published=1 AND m.adult_content=0 ORDER BY m.title", (item["id"],)))
         finally:
             db.close()
-        content = f'<h1>{item["name"]}</h1><p>{item["description"]}</p>{movie_grid(movies)}'
+        content = f'<h1>{escape(item["name"])}</h1><p>{escape(item["description"])}</p>{movie_grid(movies)}'
         return self.html(item["name"], content, description=item["description"], canonical=f'{path}/{slug}')
 
     def dispatch_dynamic(self, request: Request) -> Response | None:
@@ -185,7 +186,9 @@ class Application(MemberMixin, InterestMixin, CommentMixin, ScreeningMixin, Comm
         )
         length = min(int(environ.get("CONTENT_LENGTH") or 0), 64_000)
         if request.method in {"POST", "PUT", "PATCH"}:
-            parsed = parse_qs(environ.get("wsgi.input").read(length).decode("utf-8", "replace"), keep_blank_values=True)
+            stream = environ.get("wsgi.input")
+            raw_body = stream.read(length) if stream else b""
+            parsed = parse_qs(raw_body.decode("utf-8", "replace"), keep_blank_values=True)
             request.form = {key: values[-1] for key, values in parsed.items()}
         token = read_cookie(environ.get("HTTP_COOKIE", ""))
         session, member = load_session(self.config, token)
