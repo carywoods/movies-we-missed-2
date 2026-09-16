@@ -30,3 +30,10 @@ Run resumed on 2026-09-16 from the existing Stage 1 repository state.
 - `new` is stored as inventory status; `soft` is included and adult-labeled; `k and a` maps to Kids/Animation; `bc` maps to Black Cinema; `someday` maps to Better With a Couple of Beers at editorial confidence.
 - Raw filenames are retained for review, but source paths are stored only as SHA-256 fingerprints and are never exposed publicly.
 - Actual inventory validation: 1,625 rows, including 493 educational exclusions, 46 soft inclusions, 436 new-status rows, and 9 Kids/Animation rows.
+
+## Stage 4 — Public catalog
+
+- Status: complete
+- Added responsive home, browse/search, movie, genre, and editorial collection pages.
+- Public pages use stable slug URLs and canonical metadata; adult-labeled records are excluded from anonymous catalog pages by default.
+- Added pagination and responsive CSS with route coverage tests.
