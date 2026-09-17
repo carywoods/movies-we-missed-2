@@ -38,3 +38,25 @@ def test_adult_movies_are_not_public_by_default(tmp_path, monkeypatch):
     db.execute("INSERT INTO movies(stable_id,title,slug,parsing_confidence,adult_content) VALUES ('adult','Private Movie','private-movie','high',1)")
     db.close()
     assert request(app, "/movies/private-movie")[0] == 404
+
+def test_movie_artwork_and_metadata_render_in_cards_and_detail(tmp_path, monkeypatch):
+    app = catalog_app(tmp_path, monkeypatch)
+    poster_url = "https://image.tmdb.org/t/p/w500/moon.jpg"
+    db = connect(app.config.database_path)
+    db.execute(
+        "UPDATE movies SET poster_url=?,director='Ada Director',"
+        "cast_text='First Actor, Second Actor' WHERE slug='moon-movie-1999'",
+        (poster_url,),
+    )
+    db.close()
+
+    _, _, browse = request(app, "/movies")
+    _, _, detail = request(app, "/movies/moon-movie-1999")
+    assert poster_url.encode() in browse
+    assert b'alt="Poster for Moon Movie"' in browse
+    assert poster_url.encode() in detail
+    assert b"<strong>Director:</strong> Ada Director" in detail
+    assert b"<strong>Cast:</strong> First Actor, Second Actor" in detail
+    assert f'<meta property="og:image" content="{poster_url}">'.encode() in detail
+    assert b"/static/catalog.css" in detail
+    assert request(app, "/static/catalog.css")[0] == 200

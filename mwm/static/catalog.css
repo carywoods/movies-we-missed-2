@@ -1,0 +1,45 @@
+.poster {
+  display: block;
+  width: 72px;
+  min-height: 102px;
+  aspect-ratio: 2 / 3;
+  object-fit: cover;
+}
+
+.poster-fallback {
+  display: grid;
+  place-items: center;
+}
+
+.movie-detail {
+  display: grid;
+  grid-template-columns: minmax(180px, 260px) 1fr;
+  max-width: 980px;
+  gap: 2rem;
+}
+
+.detail-poster {
+  display: block;
+  width: 100%;
+  aspect-ratio: 2 / 3;
+  object-fit: cover;
+  border-radius: .6rem;
+  background: var(--ink);
+  color: #fff;
+  font: 4rem Georgia, serif;
+}
+
+.credits {
+  margin: .35rem 0;
+  color: var(--muted);
+}
+
+@media (max-width: 700px) {
+  .movie-detail {
+    grid-template-columns: 1fr;
+  }
+
+  .detail-poster {
+    max-width: 240px;
+  }
+}

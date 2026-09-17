@@ -21,7 +21,7 @@ from .analytics import AnalyticsMixin
 from .seo import SeoMixin
 from .admin import AdminMixin
 from .db import connect, initialize
-from .views import movie_grid, page, pagination, search_form
+from .views import movie_grid, page, pagination, safe_image_url, search_form
 
 
 @dataclass
@@ -63,6 +63,7 @@ class Application(MemberMixin, InterestMixin, CommentMixin, ScreeningMixin, Comm
             ("GET", "/genres"): self.genres,
             ("GET", "/collections"): self.collections,
             ("GET", "/static/site.css"): self.styles,
+            ("GET", "/static/catalog.css"): self.catalog_styles,
         }
         self.routes.update(self.member_routes())
         self.routes.update(self.interest_routes())
@@ -90,6 +91,11 @@ class Application(MemberMixin, InterestMixin, CommentMixin, ScreeningMixin, Comm
     def styles(self, request: Request) -> Response:
         css = (__import__("pathlib").Path(__file__).parent / "static" / "site.css").read_bytes()
         return Response(css, content_type="text/css; charset=utf-8", headers=(("Cache-Control", "public, max-age=3600"),))
+
+    def catalog_styles(self, request: Request) -> Response:
+        path = __import__("pathlib").Path(__file__).parent / "static" / "catalog.css"
+        return Response(path.read_bytes(), content_type="text/css; charset=utf-8",
+                        headers=(("Cache-Control", "public, max-age=3600"),))
 
     def home(self, request: Request) -> Response:
         db = self.db()
@@ -146,11 +152,63 @@ class Application(MemberMixin, InterestMixin, CommentMixin, ScreeningMixin, Comm
             collections = list(db.execute("SELECT c.* FROM collections c JOIN movie_collections mc ON mc.collection_id=c.id WHERE mc.movie_id=? AND c.adult_only=0 ORDER BY c.name", (movie["id"],)))
         finally:
             db.close()
-        year = f' <span class="meta">({movie["release_year"]})</span>' if movie["release_year"] else ""
-        chips = "".join(f'<a href="/genres/{x["slug"]}">{x["name"]}</a>' for x in genres) + "".join(f'<a href="/collections/{x["slug"]}">{x["name"]}</a>' for x in collections)
-        content = f'<article class="detail"><p class="meta">MOVIE</p><h1>{escape(movie["title"])}{year}</h1><p>{escape(movie["synopsis"] or "A movie waiting to be rediscovered and discussed.")}</p><div class="chips">{chips}</div></article>'
-        content += f'<p><a href="/movies/{slug}/comments">Join the discussion</a></p>' + self.commerce_panel(movie["id"])
-        return self.html(movie["title"], content, description=movie["synopsis"] or f'Discover {movie["title"]} at Movies We Missed.', canonical=f'/movies/{slug}')
+        year = (
+            f' <span class="meta">({movie["release_year"]})</span>'
+            if movie["release_year"]
+            else ""
+        )
+        chips = "".join(
+            f'<a href="/genres/{escape(item["slug"], quote=True)}">'
+            f'{escape(item["name"])}</a>'
+            for item in genres
+        ) + "".join(
+            f'<a href="/collections/{escape(item["slug"], quote=True)}">'
+            f'{escape(item["name"])}</a>'
+            for item in collections
+        )
+        poster_url = safe_image_url(movie["poster_url"])
+        if poster_url:
+            poster = (
+                f'<img class="detail-poster" src="{escape(poster_url, quote=True)}" '
+                f'alt="Poster for {escape(movie["title"], quote=True)}">'
+            )
+        else:
+            poster = (
+                '<div class="detail-poster poster-fallback" '
+                'aria-hidden="true">M</div>'
+            )
+        credits = ""
+        if movie["director"]:
+            credits += (
+                f'<p class="credits"><strong>Director:</strong> '
+                f'{escape(movie["director"])}</p>'
+            )
+        if movie["cast_text"]:
+            credits += (
+                f'<p class="credits"><strong>Cast:</strong> '
+                f'{escape(movie["cast_text"])}</p>'
+            )
+        synopsis = movie["synopsis"] or (
+            "A movie waiting to be rediscovered and discussed."
+        )
+        content = (
+            f'<article class="detail movie-detail">{poster}<div>'
+            f'<p class="meta">MOVIE</p><h1>{escape(movie["title"])}{year}</h1>'
+            f'<p>{escape(synopsis)}</p>{credits}<div class="chips">{chips}</div>'
+            f'</div></article>'
+        )
+        content += (
+            f'<p><a href="/movies/{escape(slug, quote=True)}/comments">'
+            f'Join the discussion</a></p>{self.commerce_panel(movie["id"])}'
+        )
+        return self.html(
+            movie["title"],
+            content,
+            description=movie["synopsis"]
+            or f'Discover {movie["title"]} at Movies We Missed.',
+            canonical=f'/movies/{slug}',
+            image=poster_url or None,
+        )
 
     def taxonomy_detail(self, table: str, join_table: str, foreign_key: str, path: str, slug: str) -> Response:
         db = self.db()

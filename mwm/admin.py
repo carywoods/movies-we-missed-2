@@ -73,7 +73,27 @@ class AdminMixin(AppMixin):
             db.close()
         genre_fields = "".join(f'<label class="check"><input type="checkbox" name="genre_{g["id"]}" value="1"{" checked" if g["selected"] else ""}>{escape(g["name"])}</label>' for g in genres)
         collection_fields = "".join(f'<label class="check"><input type="checkbox" name="collection_{c["id"]}" value="1"{" checked" if c["selected"] else ""}>{escape(c["name"])}</label>' for c in collections)
-        fields = f'<label>Title<input name="title" value="{escape(movie["title"])}" required></label><label>Year<input name="release_year" type="number" value="{movie["release_year"] or ""}"></label><label>Synopsis<textarea name="synopsis">{escape(movie["synopsis"] or "")}</textarea></label><label class="check"><input type="checkbox" name="published" value="1"{" checked" if movie["published"] else ""}> Public</label><label class="check"><input type="checkbox" name="featured" value="1"{" checked" if movie["featured"] else ""}> Featured</label><label class="check"><input type="checkbox" name="adult_content" value="1"{" checked" if movie["adult_content"] else ""}> Adult labeled</label><fieldset><legend>Genres</legend>{genre_fields}</fieldset><fieldset><legend>Collections</legend>{collection_fields}</fieldset>'
+        fields = (
+            f'<label>Title<input name="title" value="{escape(movie["title"])}" '
+            f'required></label><label>Year<input name="release_year" type="number" '
+            f'value="{movie["release_year"] or ""}"></label>'
+            f'<label>Poster URL<input name="poster_url" type="url" '
+            f'value="{escape(movie["poster_url"] or "", quote=True)}"></label>'
+            f'<label>Director<input name="director" '
+            f'value="{escape(movie["director"] or "", quote=True)}"></label>'
+            f'<label>Cast<textarea name="cast_text">'
+            f'{escape(movie["cast_text"] or "")}</textarea></label>'
+            f'<label>Synopsis<textarea name="synopsis">'
+            f'{escape(movie["synopsis"] or "")}</textarea></label>'
+            f'<label class="check"><input type="checkbox" name="published" value="1"'
+            f'{" checked" if movie["published"] else ""}> Public</label>'
+            f'<label class="check"><input type="checkbox" name="featured" value="1"'
+            f'{" checked" if movie["featured"] else ""}> Featured</label>'
+            f'<label class="check"><input type="checkbox" name="adult_content" value="1"'
+            f'{" checked" if movie["adult_content"] else ""}> Adult labeled</label>'
+            f'<fieldset><legend>Genres</legend>{genre_fields}</fieldset>'
+            f'<fieldset><legend>Collections</legend>{collection_fields}</fieldset>'
+        )
         return self.form_page(request, "Edit movie", fields, f"/admin/movies/{movie_id}/edit")
 
     def save_admin_movie(self, request, movie_id: int):
@@ -84,6 +104,11 @@ class AdminMixin(AppMixin):
         if not self.valid_csrf(request):
             return Response(b"Invalid CSRF token", 403)
         title = request.form.get("title", "").strip()[:300]
+        poster_url = request.form.get("poster_url", "").strip()[:2000]
+        if poster_url:
+            parsed_poster = urlparse(poster_url)
+            if parsed_poster.scheme not in {"http", "https"} or not parsed_poster.netloc:
+                return Response(b"Invalid poster URL", 400)
         try:
             year = int(request.form["release_year"]) if request.form.get("release_year") else None
         except ValueError:
@@ -92,7 +117,23 @@ class AdminMixin(AppMixin):
             return Response(b"Invalid title or year", 400)
         db = self.db()
         try:
-            db.execute("UPDATE movies SET title=?,release_year=?,synopsis=?,published=?,featured=?,adult_content=?,updated_at=CURRENT_TIMESTAMP WHERE id=?", (title, year, request.form.get("synopsis", "").strip()[:5000], int(request.form.get("published") == "1"), int(request.form.get("featured") == "1"), int(request.form.get("adult_content") == "1"), movie_id))
+            db.execute(
+                "UPDATE movies SET title=?,release_year=?,synopsis=?,poster_url=?,"
+                "director=?,cast_text=?,published=?,featured=?,adult_content=?,"
+                "updated_at=CURRENT_TIMESTAMP WHERE id=?",
+                (
+                    title,
+                    year,
+                    request.form.get("synopsis", "").strip()[:5000],
+                    poster_url or None,
+                    request.form.get("director", "").strip()[:300] or None,
+                    request.form.get("cast_text", "").strip()[:2000] or None,
+                    int(request.form.get("published") == "1"),
+                    int(request.form.get("featured") == "1"),
+                    int(request.form.get("adult_content") == "1"),
+                    movie_id,
+                ),
+            )
             genre_ids = {row[0] for row in db.execute("SELECT id FROM genres")}
             collection_ids = {row[0] for row in db.execute("SELECT id FROM collections")}
             db.execute("DELETE FROM movie_genres WHERE movie_id=? AND source='editorial'", (movie_id,))

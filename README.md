@@ -32,6 +32,8 @@ mwm-server                       # bind 0.0.0.0:$PORT
 mwm-import movie_inventory.csv   # idempotent inventory import
 mwm-enrich enqueue               # queue deterministic merchandise work
 mwm-enrich work --limit 25       # process a small batch
+mwm-enrich metadata-enqueue      # queue movies missing metadata or artwork
+mwm-enrich metadata-work --limit 25  # fetch TMDB posters, credits, and genres
 mwm-backup backups               # consistent online SQLite backup
 python -m pytest -q              # complete test suite
 ```
@@ -39,6 +41,9 @@ python -m pytest -q              # complete test suite
 ## Configuration and deployment
 
 See `.env.example`. Optional email, metadata, and model providers default to `disabled`, so credentials are never required for startup.
+
+Metadata enrichment uses `METADATA_PROVIDER=tmdb` and a TMDB API Read Access Token
+in `METADATA_API_KEY`. Ambiguous title/year matches are held for operator review.
 
 For production, set an HTTPS `SITE_URL`, a unique 32+ character `SESSION_SECRET`, and `DATABASE_PATH` on a persistent local volume. See [DEPLOYMENT.md](DEPLOYMENT.md) for Coolify and [OPERATIONS.md](OPERATIONS.md) for persistence and backup procedures.
 

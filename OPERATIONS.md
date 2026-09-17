@@ -29,3 +29,5 @@ Restore by stopping the application, retaining the current database for rollback
 - `mwm-import movie_inventory.csv` performs an idempotent inventory refresh.
 - `mwm-enrich enqueue` queues missing merchandise enrichment and `mwm-enrich work --limit 25` processes small deterministic batches.
 - `/health` is the liveness/readiness target.
+- With TMDB configured, `mwm-enrich metadata-enqueue` queues missing catalog
+  metadata and `mwm-enrich metadata-work --limit 25` processes it in batches.

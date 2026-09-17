@@ -9,13 +9,14 @@ def test_migrations_and_seed_are_idempotent(tmp_path: Path, monkeypatch) -> None
     monkeypatch.setenv("DATABASE_PATH", str(database))
     config = Config.from_env()
 
-    assert initialize(config) == ["001_initial.sql"]
+    assert initialize(config) == ["001_initial.sql", "002_catalog_metadata.sql"]
     assert initialize(config) == []
 
     connection = connect(database)
     try:
         assert connection.execute("PRAGMA integrity_check").fetchone()[0] == "ok"
-        assert connection.execute("SELECT count(*) FROM genres").fetchone()[0] == 12
+        assert connection.execute("SELECT count(*) FROM genres").fetchone()[0] == 23
+        assert connection.execute("SELECT count(*) FROM collections").fetchone()[0] == 7
         assert connection.execute("SELECT count(*) FROM sponsors").fetchone()[0] == 1
         assert connection.execute("SELECT count(*) FROM merchandise").fetchone()[0] == 1
     finally:

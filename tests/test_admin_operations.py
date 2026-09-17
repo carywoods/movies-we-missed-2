@@ -29,11 +29,23 @@ def test_operator_dashboard_and_domain_pages(tmp_path, monkeypatch):
 
 def test_movie_edit_and_classification(tmp_path, monkeypatch):
     app, cookie, csrf, movie, genre, collection = admin_fixture(tmp_path, monkeypatch)
-    data = {"csrf": csrf, "title": "Edited Movie", "release_year": "2001", "synopsis": "Edited synopsis", "published": "1", "featured": "1", f"genre_{genre}": "1", f"collection_{collection}": "1"}
+    data = {
+        "csrf": csrf,
+        "title": "Edited Movie",
+        "release_year": "2001",
+        "synopsis": "Edited synopsis",
+        "poster_url": "https://images.example/poster.jpg",
+        "director": "A Director",
+        "cast_text": "First Actor, Second Actor",
+        "published": "1",
+        "featured": "1",
+        f"genre_{genre}": "1",
+        f"collection_{collection}": "1",
+    }
     assert request(app, f"/admin/movies/{movie}/edit", "POST", data, cookie)[0] == 303
     db = connect(app.config.database_path)
-    updated = db.execute("SELECT title,featured FROM movies WHERE id=?", (movie,)).fetchone()
-    assert tuple(updated) == ("Edited Movie", 1)
+    updated = db.execute("SELECT title,featured,poster_url,director,cast_text FROM movies WHERE id=?", (movie,)).fetchone()
+    assert tuple(updated) == ("Edited Movie", 1, "https://images.example/poster.jpg", "A Director", "First Actor, Second Actor")
     assert db.execute("SELECT count(*) FROM movie_genres WHERE movie_id=? AND genre_id=?", (movie, genre)).fetchone()[0] == 1
     assert db.execute("SELECT count(*) FROM movie_collections WHERE movie_id=? AND collection_id=?", (movie, collection)).fetchone()[0] == 1
     db.close()

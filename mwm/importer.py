@@ -30,6 +30,7 @@ GENRE_MAP = {
     "docs": ("Documentary",),
     "musicals": ("Musical",),
     "k and a": ("Kids", "Animation"),
+    "comics": ("Action", "Science Fiction"),
 }
 COLLECTION_MAP = {
     "bc": ("Black Cinema",),
@@ -37,6 +38,8 @@ COLLECTION_MAP = {
     "k and a": ("Kids and Animation",),
     "soft": ("Adult & Erotic Cinema",),
     "someday": ("Better With a Couple of Beers",),
+    "new": ("Recent Additions",),
+    "comics": ("Comic Book Movies",),
 }
 
 
@@ -63,7 +66,8 @@ def slugify(value: str) -> str:
 def parse_filename(filename: str) -> tuple[str, int | None, str]:
     stem = Path(filename).stem
     stem = LEADING_RE.sub("", stem).replace("_", " ").replace(".", " ")
-    match = YEAR_RE.search(stem)
+    year_matches = list(YEAR_RE.finditer(stem))
+    match = year_matches[-1] if year_matches else None
     year = int(match.group(1)) if match else None
     title_part = stem[: match.start()] if match else stem
     title_part = NOISE_RE.sub("", title_part)

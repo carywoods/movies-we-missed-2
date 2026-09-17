@@ -58,3 +58,52 @@ def test_actual_inventory_import(tmp_path: Path, monkeypatch):
     assert report.soft_included == 46
     assert report.new_included == 436
     assert report.kids_included == 9
+
+def test_new_and_comics_categories_receive_taxonomy(tmp_path: Path, monkeypatch):
+    inventory = tmp_path / "categories.csv"
+    with inventory.open("w", newline="") as output:
+        writer = csv.writer(output)
+        writer.writerow(["category", "filename", "extension", "full_path"])
+        writer.writerow(
+            ["new", "Fresh Film.2024.mp4", "mp4", "private://new/Fresh Film.2024.mp4"]
+        )
+        writer.writerow(
+            [
+                "comics",
+                "Hero Film.2023.mp4",
+                "mp4",
+                "private://comics/Hero Film.2023.mp4",
+            ]
+        )
+    monkeypatch.setenv("DATABASE_PATH", str(tmp_path / "categories.db"))
+    config = Config.from_env()
+
+    report = import_inventory(inventory, config)
+    db = connect(config.database_path)
+    recent = db.execute(
+        "SELECT count(*) FROM movie_collections mc "
+        "JOIN collections c ON c.id=mc.collection_id "
+        "JOIN movies m ON m.id=mc.movie_id "
+        "WHERE c.slug='recent-additions' AND m.title='Fresh Film'"
+    ).fetchone()[0]
+    comic_collection = db.execute(
+        "SELECT count(*) FROM movie_collections mc "
+        "JOIN collections c ON c.id=mc.collection_id "
+        "JOIN movies m ON m.id=mc.movie_id "
+        "WHERE c.slug='comic-book-movies' AND m.title='Hero Film'"
+    ).fetchone()[0]
+    comic_genres = {
+        row[0]
+        for row in db.execute(
+            "SELECT g.name FROM movie_genres mg JOIN genres g ON g.id=mg.genre_id "
+            "JOIN movies m ON m.id=mg.movie_id WHERE m.title='Hero Film'"
+        )
+    }
+    db.close()
+
+    assert report.imported == 2
+    assert recent == 1
+    assert comic_collection == 1
+    assert comic_genres == {"Action", "Science Fiction"}
+    assert parse_filename("2001.A.Space.Odyssey.1968.1080p.mkv")[:2] == ("2001 A Space Odyssey", 1968)
+    assert parse_filename("1984.1984.720p.mp4")[:2] == ("1984", 1984)
