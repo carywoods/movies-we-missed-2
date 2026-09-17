@@ -57,7 +57,8 @@ class SeoMixin(AppMixin):
 
     def service_worker(self, request):
         from .web import Response
-        script = """const CACHE='mwm-v1';const SHELL=['/','/offline','/static/site.css','/static/icon.svg'];self.addEventListener('install',e=>e.waitUntil(caches.open(CACHE).then(c=>c.addAll(SHELL))));self.addEventListener('activate',e=>e.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(k=>k!==CACHE).map(k=>caches.delete(k))))));self.addEventListener('fetch',e=>{if(e.request.method!=='GET')return;e.respondWith(fetch(e.request).then(r=>{const copy=r.clone();caches.open(CACHE).then(c=>c.put(e.request,copy));return r}).catch(()=>caches.match(e.request).then(r=>r||caches.match('/offline'))))});"""
+        # Keep this denylist in sync when adding authenticated routes.
+        script = r"""const CACHE='mwm-v1';const SHELL=['/','/offline','/static/site.css','/static/icon.svg'];const PRIVATE=/^\/(admin|profile|discover)(\/|$)/;self.addEventListener('install',e=>e.waitUntil(caches.open(CACHE).then(c=>c.addAll(SHELL))));self.addEventListener('activate',e=>e.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(k=>k!==CACHE).map(k=>caches.delete(k))))));self.addEventListener('fetch',e=>{if(e.request.method!=='GET')return;const isPrivate=PRIVATE.test(new URL(e.request.url).pathname);e.respondWith(fetch(e.request).then(r=>{if(!isPrivate){const copy=r.clone();caches.open(CACHE).then(c=>c.put(e.request,copy));}return r;}).catch(()=>isPrivate?fetch(e.request):caches.match(e.request).then(r=>r||caches.match('/offline'))));});"""
         return Response(script.encode(), content_type="application/javascript; charset=utf-8", headers=(("Service-Worker-Allowed", "/"), ("Cache-Control", "no-cache")))
 
     def offline(self, request):

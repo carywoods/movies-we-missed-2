@@ -45,6 +45,9 @@ def test_manifest_icon_worker_and_offline_fallback(tmp_path, monkeypatch):
     assert status == 200 and manifest["display"] == "standalone"
     assert len(manifest["icons"]) == 2
     assert request(app, "/static/icon.svg")[0] == 200
-    assert request(app, "/sw.js")[0] == 200
+    status, _, worker = request(app, "/sw.js")
+    assert status == 200
+    assert rb"const PRIVATE=/^\/(admin|profile|discover)(\/|$)/;" in worker
+    assert b"if(!isPrivate)" in worker and b"isPrivate?fetch(e.request)" in worker
     status, _, offline = request(app, "/offline")
     assert status == 200 and b"offline" in offline.lower()
