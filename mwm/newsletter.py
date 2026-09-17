@@ -156,10 +156,42 @@ class NewsletterMixin(AppMixin):
         if not issue:
             return Response(b"Not found", 404)
         content_data = json.loads(issue["content_json"])
-        movies = "".join(f'<li><a href="/movies/{m["slug"]}">{escape(m["title"])}</a></li>' for m in content_data.get("movies", []))
-        screenings = "".join(f'<li><a href="/screenings/{s["slug"]}">{escape(s["title"])}</a></li>' for s in content_data.get("screenings", []))
+        unsubscribe_url = f'{self.config.site_url.rstrip("/")}/newsletter/unsubscribe?token=preview'
+        rendered = self._render_newsletter_html(
+            issue,
+            content_data,
+            issue["sponsor_name"],
+            issue["sponsor_id"],
+            unsubscribe_url,
+        )
         send = f'<form method="post" action="/admin/newsletter/{issue_id}/send"><input type="hidden" name="csrf" value="{request.session["csrf_token"]}"><button>Send issue</button></form>'
-        return self.html("Newsletter preview", f'<p class="meta">PREVIEW · {issue["cadence"]}</p><h1>{escape(issue["subject"])}</h1><p>{escape(issue["intro"])}</p><h2>Movies</h2><ul>{movies}</ul><h2>Screenings</h2><ul>{screenings}</ul><aside class="sponsor">Sponsored by {escape(issue["sponsor_name"] or "")}</aside>{send}', canonical=f"/admin/newsletter/{issue_id}/preview")
+        return self.html("Newsletter preview", f'<p class="meta">PREVIEW · {issue["cadence"]}</p>{rendered}{send}', canonical=f"/admin/newsletter/{issue_id}/preview")
+
+    @staticmethod
+    def _render_newsletter_html(issue, content_data, sponsor_name, sponsor_id, unsubscribe_url: str) -> str:
+        movies = "".join(
+            f'<li><a href="/movies/{escape(str(movie["slug"]), quote=True)}">{escape(str(movie["title"]))}</a></li>'
+            for movie in content_data.get("movies", [])
+        )
+        screenings = "".join(
+            f'<li><a href="/screenings/{escape(str(screening["slug"]), quote=True)}">{escape(str(screening["title"]))}</a></li>'
+            for screening in content_data.get("screenings", [])
+        )
+        sponsor = ""
+        if sponsor_id and sponsor_name:
+            sponsor = (
+                f'<aside class="sponsor">Sponsored by '
+                f'<a rel="sponsored" href="/out/sponsor/{int(sponsor_id)}?placement=newsletter">'
+                f'{escape(str(sponsor_name))}</a></aside>'
+            )
+        return (
+            f'<h1>{escape(issue["subject"])}</h1>'
+            f'<p>{escape(issue["intro"])}</p>'
+            f'<h2>Movies</h2><ul>{movies}</ul>'
+            f'<h2>Screenings</h2><ul>{screenings}</ul>'
+            f'{sponsor}'
+            f'<p class="meta"><a href="{escape(unsubscribe_url, quote=True)}">Unsubscribe</a></p>'
+        )
 
     def send_newsletter(self, request, issue_id: int):
         from .web import Response
@@ -173,11 +205,30 @@ class NewsletterMixin(AppMixin):
         db = self.db()
         sent = 0
         try:
-            issue = db.execute("SELECT * FROM newsletter_issues WHERE id=?", (issue_id,)).fetchone()
+            issue = db.execute("SELECT i.*,s.name sponsor_name FROM newsletter_issues i LEFT JOIN sponsors s ON s.id=i.sponsor_id WHERE i.id=?", (issue_id,)).fetchone()
             if not issue:
                 return Response(b"Not found", 404)
-            for subscriber in db.execute("SELECT email FROM newsletter_subscribers WHERE status='active' AND cadence=?", (issue["cadence"],)):
-                sent += int(provider.send(EmailMessage(subscriber["email"], issue["subject"], issue["intro"])))
+            content_data = json.loads(issue["content_json"])
+            subscribers = list(db.execute("SELECT id,email FROM newsletter_subscribers WHERE status='active' AND cadence=?", (issue["cadence"],)))
+            for subscriber in subscribers:
+                unsubscribe_token = secrets.token_urlsafe(32)
+                db.execute(
+                    "UPDATE newsletter_subscribers SET unsubscribe_token_hash=?,updated_at=CURRENT_TIMESTAMP WHERE id=?",
+                    (self._token_hash(unsubscribe_token), subscriber["id"]),
+                )
+                unsubscribe_url = f'{self.config.site_url.rstrip("/")}/newsletter/unsubscribe?token={unsubscribe_token}'
+                full_html = self._render_newsletter_html(
+                    issue,
+                    content_data,
+                    issue["sponsor_name"],
+                    issue["sponsor_id"],
+                    unsubscribe_url,
+                )
+                headers = {
+                    "List-Unsubscribe": f"<{unsubscribe_url}>",
+                    "List-Unsubscribe-Post": "List-Unsubscribe=One-Click",
+                }
+                sent += int(provider.send(EmailMessage(subscriber["email"], issue["subject"], full_html, headers)))
             db.execute("UPDATE newsletter_issues SET status='sent',sent_at=CURRENT_TIMESTAMP,send_count=? WHERE id=?", (sent, issue_id))
         finally:
             db.close()

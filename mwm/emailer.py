@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from .config import Config
 
@@ -10,6 +10,7 @@ class EmailMessage:
     to: str
     subject: str
     html: str
+    headers: dict[str, str] = field(default_factory=dict)
 
 
 class DisabledEmailProvider:
@@ -23,7 +24,7 @@ class ConsoleEmailProvider:
     name = "console"
 
     def send(self, message: EmailMessage) -> bool:
-        print(f"EMAIL to={message.to!r} subject={message.subject!r}")
+        print(f"EMAIL to={message.to!r} subject={message.subject!r} headers={message.headers!r}")
         return True
 
 
