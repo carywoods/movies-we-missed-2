@@ -14,8 +14,8 @@
 ## Inventory and content
 
 - Treat the supplied inventory as private operator input and keep it out of source control. Retain filenames for review, but hash source paths.
-- Map `new` to storage status, `soft` to included/adult-labeled, `k and a` to Kids/Animation, `bc` to Black Cinema, and `someday` to Better With a Couple of Beers at lower editorial confidence.
-- Exclude adult-labeled movies from anonymous catalog pages and the sitemap.
+- Map `new` to Recent Additions, `comics` to Comics & Graphic Novels, `soft` to public Erotica, `k and a` to Kids/Animation, `bc` to Black Cinema, and `someday` to Better With a Couple of Beers at lower editorial confidence.
+- Treat Erotica and LGBQ Stories as public editorial collections. The inventory contains no adult-film category.
 
 ## Revenue and messaging
 

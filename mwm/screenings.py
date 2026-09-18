@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from .mixins import AppMixin
 
+import json
 import re
 from html import escape
 
@@ -75,11 +76,28 @@ class ScreeningMixin(AppMixin):
             return Response(b"Invalid CSRF token", 403)
         db = self.db()
         try:
+            db.execute("BEGIN IMMEDIATE")
             screening = db.execute("SELECT * FROM screenings WHERE slug=? AND status IN ('announced','rsvp_open','full')", (slug,)).fetchone()
             if not screening:
                 return Response(b"RSVP is not available", 409)
             if action == "cancel-rsvp":
-                db.execute("UPDATE rsvps SET status='cancelled',updated_at=CURRENT_TIMESTAMP WHERE screening_id=? AND member_id=?", (screening["id"], request.member["member_id"]))
+                changed = db.execute("UPDATE rsvps SET status='cancelled',updated_at=CURRENT_TIMESTAMP WHERE screening_id=? AND member_id=? AND status IN ('going','waitlisted')", (screening["id"], request.member["member_id"]))
+                if changed.rowcount and screening["capacity"]:
+                    attending = db.execute("SELECT COALESCE(sum(1+guest_count),0) FROM rsvps WHERE screening_id=? AND status='going'", (screening["id"],)).fetchone()[0]
+                    available = screening["capacity"] - attending
+                    waitlisted = list(db.execute("SELECT * FROM rsvps WHERE screening_id=? AND status='waitlisted' ORDER BY created_at,id", (screening["id"],)))
+                    for candidate in waitlisted:
+                        party_size = candidate["guest_count"] + 1
+                        if party_size > available:
+                            continue
+                        db.execute("UPDATE rsvps SET status='going',updated_at=CURRENT_TIMESTAMP WHERE id=?", (candidate["id"],))
+                        db.execute(
+                            "INSERT INTO notifications(member_id,kind,title,body,destination_url) VALUES (?,?,?,?,?)",
+                            (candidate["member_id"], "rsvp_promoted", "You are in", f'A place opened for {screening["title"]}. Your RSVP is confirmed.', f'/screenings/{slug}'),
+                        )
+                        available -= party_size
+                        if available <= 0:
+                            break
             else:
                 try:
                     guests = min(4, max(0, int(request.form.get("guest_count", "0"))))
@@ -88,7 +106,12 @@ class ScreeningMixin(AppMixin):
                 attending = db.execute("SELECT COALESCE(sum(1+guest_count),0) FROM rsvps WHERE screening_id=? AND status='going' AND member_id!=?", (screening["id"], request.member["member_id"])).fetchone()[0]
                 status = "waitlisted" if screening["capacity"] and attending + guests + 1 > screening["capacity"] else "going"
                 db.execute("INSERT INTO rsvps(screening_id,member_id,guest_count,status) VALUES (?,?,?,?) ON CONFLICT(screening_id,member_id) DO UPDATE SET guest_count=excluded.guest_count,status=excluded.status,updated_at=CURRENT_TIMESTAMP", (screening["id"], request.member["member_id"], guests, status))
-                db.execute("INSERT INTO analytics_events(event_type,object_type,object_id,member_id,metadata_json) VALUES ('rsvp','screening',?,?,?)", (screening["id"], request.member["member_id"], '{"status":"' + status + '"}'))
+                db.execute("INSERT INTO analytics_events(event_type,object_type,object_id,member_id,metadata_json) VALUES ('rsvp','screening',?,?,?)", (screening["id"], request.member["member_id"], json.dumps({"status": status}, separators=(",", ":"))))
+            db.execute("COMMIT")
+        except Exception:
+            if db.in_transaction:
+                db.execute("ROLLBACK")
+            raise
         finally:
             db.close()
         return self.redirect(f"/screenings/{slug}")

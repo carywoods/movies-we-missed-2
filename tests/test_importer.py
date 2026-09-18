@@ -9,6 +9,9 @@ from mwm.importer import import_inventory, parse_filename
 def test_filename_normalization():
     assert parse_filename("Clueless.1995.720p.BluRay.x264.mp4") == ("Clueless", 1995, "high")
     assert parse_filename("18+ The Overnight 2015 UNCENSORED.mkv")[:2] == ("The Overnight", 2015)
+    assert parse_filename("1984.1984.BluRay.mkv")[:2] == ("1984", 1984)
+    assert parse_filename("2001 A Space Odyssey 1968.mkv")[:2] == ("2001 A Space Odyssey", 1968)
+    assert parse_filename("1917.mkv") == ("1917", None, "medium")
 
 
 def test_import_rules_and_path_privacy(tmp_path: Path, monkeypatch):
@@ -38,9 +41,11 @@ def test_import_rules_and_path_privacy(tmp_path: Path, monkeypatch):
         assert report.updated == 1
         assert report.duplicates == 1
         assert db.execute("SELECT storage_status FROM movies WHERE title='Clueless'").fetchone()[0] == "new"
-        assert db.execute("SELECT adult_content FROM movies WHERE title='After Hours'").fetchone()[0] == 1
+        assert db.execute("SELECT adult_content FROM movies WHERE title='After Hours'").fetchone()[0] == 0
         stored = " ".join(row[0] or "" for row in db.execute("SELECT path_fingerprint FROM movie_sources"))
         assert "private://" not in stored
+        assert db.execute("SELECT count(*) FROM movie_collections mc JOIN collections c ON c.id=mc.collection_id JOIN movies m ON m.id=mc.movie_id WHERE c.slug='erotica' AND m.title='After Hours'").fetchone()[0] == 1
+        assert db.execute("SELECT count(*) FROM movie_collections mc JOIN collections c ON c.id=mc.collection_id JOIN movies m ON m.id=mc.movie_id WHERE c.slug='recent-additions' AND m.title='Clueless'").fetchone()[0] == 1
         assert db.execute("SELECT count(*) FROM movie_sources WHERE source_category='bc'").fetchone()[0] == 1
         assert db.execute("SELECT count(*) FROM movie_collections mc JOIN collections c ON c.id=mc.collection_id WHERE c.slug='better-with-a-couple-of-beers'").fetchone()[0] == 1
     finally:

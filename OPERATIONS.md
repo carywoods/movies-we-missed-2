@@ -6,6 +6,8 @@ Set `DATABASE_PATH` to a file on a persistent volume. In Coolify, mount a volume
 
 SQLite runs in WAL mode. Keep the database, `-wal`, and `-shm` files on the same local filesystem. Do not put the live database on NFS/SMB. One application process is the supported first-run topology.
 
+The bundled server handles requests on daemon threads while retaining the supported one-process SQLite topology. Newsletter delivery records make failed-recipient retries safe and prevent a sent issue from being dispatched twice.
+
 ## Backups
 
 Create a transactionally consistent online backup with:

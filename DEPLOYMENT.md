@@ -8,6 +8,7 @@
 4. Set the container port to `8080`, or choose another `PORT` and expose that same value. The application binds `0.0.0.0`.
 5. Configure the health check path as `/health` with expected HTTP status 200.
 6. Deploy, run `mwm-import movie_inventory.csv` once if the inventory is mounted/copied into the container, then confirm `/`, `/movies`, and `/health`.
+7. For outbound newsletters and password recovery, set `EMAIL_PROVIDER=smtp` plus the SMTP variables in `.env.example`; otherwise email remains safely disabled.
 
 The image runs as non-root UID 10001. Ensure the Coolify volume is writable by that user. Use one replica for the SQLite first run.
 

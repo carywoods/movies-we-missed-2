@@ -54,6 +54,12 @@ def test_capacity_waitlist_and_cancel(tmp_path, monkeypatch):
     db.close()
     cancel = f'/screenings/{screening["slug"]}/cancel-rsvp'
     assert request(app, cancel, "POST", {"csrf": first_csrf}, first_cookie)[0] == 303
+    db = connect(app.config.database_path)
+    assert [r[0] for r in db.execute("SELECT status FROM rsvps ORDER BY id")] == ["cancelled", "going"]
+    notification = db.execute("SELECT kind,destination_url FROM notifications WHERE kind='rsvp_promoted'").fetchone()
+    assert tuple(notification) == ("rsvp_promoted", f'/screenings/{screening["slug"]}')
+    db.close()
+    assert b"You are in" in request(app, "/profile", cookie=second_cookie)[2]
 
 
 def test_screening_admin_is_role_gated(tmp_path, monkeypatch):

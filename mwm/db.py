@@ -73,7 +73,10 @@ def seed(conn: sqlite3.Connection, config: Config) -> None:
         ("Classics", "classics", "Movies that reward another look—or the first look we somehow missed.", 0, 0),
         ("Kids and Animation", "kids-and-animation", "Family-minded discoveries, animated favorites, and movies for younger audiences.", 0, 1),
         ("Better With a Couple of Beers", "better-with-a-couple-of-beers", "Goofy, pulpy, cultish, action-heavy, and cheerfully low-stakes movie-night choices.", 0, 0),
-        ("Adult & Erotic Cinema", "adult-erotic-cinema", "Adult-oriented cinema presented with clear labeling and without stigma.", 1, 0),
+        ("Erotica", "erotica", "Stories centered on desire, intimacy, and erotic themes.", 0, 0),
+        ("LGBQ Stories", "lgbq-stories", "Movies centered on lesbian, gay, bisexual, and queer lives and stories.", 0, 0),
+        ("Recent Additions", "recent-additions", "Newly added titles awaiting deeper editorial classification.", 0, 0),
+        ("Comics & Graphic Novels", "comics-graphic-novels", "Screen stories adapted from comics and graphic novels.", 0, 0),
     ]
     conn.executemany(
         "INSERT INTO collections(name,slug,description,adult_only,family_safe) VALUES (?,?,?,?,?) "

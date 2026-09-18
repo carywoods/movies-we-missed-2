@@ -1,6 +1,8 @@
 # Project Status
 
 First-run definition of done: **implemented and verified**.
+Last verified 2026-09-18: 54 tests, clean type/compile checks, isolated wheel install, production health check, and local database migration/integrity verification.
+
 
 | Area | Status | Evidence |
 |---|---|---|

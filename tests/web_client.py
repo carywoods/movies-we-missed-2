@@ -4,7 +4,7 @@ from io import BytesIO
 from urllib.parse import urlencode
 
 
-def request(app, path: str, method: str = "GET", data: dict | None = None, cookie: str = ""):
+def request(app, path: str, method: str = "GET", data: dict | None = None, cookie: str = "", environ_overrides: dict | None = None):
     query = ""
     body = b""
     if method == "GET" and data:
@@ -27,5 +27,7 @@ def request(app, path: str, method: str = "GET", data: dict | None = None, cooki
         "HTTP_COOKIE": cookie,
         "REMOTE_ADDR": "127.0.0.1",
     }
+    if environ_overrides:
+        environ.update(environ_overrides)
     response = b"".join(app(environ, start_response))
     return captured["status"], captured["headers"], response

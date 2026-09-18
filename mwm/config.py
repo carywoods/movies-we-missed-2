@@ -27,6 +27,11 @@ class Config:
     email_provider: str
     email_api_key: str
     email_from: str
+    smtp_host: str
+    smtp_port: int
+    smtp_username: str
+    smtp_password: str
+    smtp_starttls: bool
     metadata_provider: str
     metadata_api_key: str
     model_provider: str
@@ -44,6 +49,10 @@ class Config:
             raise RuntimeError("PORT must be an integer") from exc
         if not 1 <= port <= 65535:
             raise RuntimeError("PORT must be between 1 and 65535")
+        try:
+            smtp_port = int(os.getenv("SMTP_PORT", "587"))
+        except ValueError as exc:
+            raise RuntimeError("SMTP_PORT must be an integer") from exc
         site_url = os.getenv("SITE_URL", "http://localhost:8080").rstrip("/")
         parsed = urlparse(site_url)
         if parsed.scheme not in {"http", "https"} or not parsed.netloc:
@@ -67,6 +76,11 @@ class Config:
             email_provider=os.getenv("EMAIL_PROVIDER", "disabled").strip().lower(),
             email_api_key=os.getenv("EMAIL_API_KEY", ""),
             email_from=os.getenv("EMAIL_FROM", "Movies We Missed <club@example.com>"),
+            smtp_host=os.getenv("SMTP_HOST", "").strip(),
+            smtp_port=smtp_port,
+            smtp_username=os.getenv("SMTP_USERNAME", "").strip(),
+            smtp_password=os.getenv("SMTP_PASSWORD", ""),
+            smtp_starttls=_bool("SMTP_STARTTLS", True),
             metadata_provider=os.getenv("METADATA_PROVIDER", "disabled").strip().lower(),
             metadata_api_key=os.getenv("METADATA_API_KEY", ""),
             model_provider=os.getenv("MODEL_PROVIDER", "disabled").strip().lower(),
@@ -80,4 +94,8 @@ class Config:
 
     @property
     def email_enabled(self) -> bool:
+        if self.email_provider == "console":
+            return True
+        if self.email_provider == "smtp":
+            return bool(self.smtp_host and self.email_from)
         return self.email_provider != "disabled" and bool(self.email_api_key)

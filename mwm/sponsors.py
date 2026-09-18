@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from .mixins import AppMixin
 
+import json
 import re
 from html import escape
 from urllib.parse import urlparse
@@ -23,7 +24,7 @@ class SponsorMixin(AppMixin):
             if urlparse(sponsor["destination_url"]).scheme not in {"http", "https"}:
                 return Response(b"Invalid sponsor destination", 500)
             member_id = request.member["member_id"] if request.member else None
-            db.execute("INSERT INTO analytics_events(event_type,object_type,object_id,member_id,source,metadata_json) VALUES ('sponsor_click','sponsor',?,?,?,?)", (sponsor_id, member_id, placement, '{"placement":"' + placement.replace('"', '') + '"}'))
+            db.execute("INSERT INTO analytics_events(event_type,object_type,object_id,member_id,source,metadata_json) VALUES ('sponsor_click','sponsor',?,?,?,?)", (sponsor_id, member_id, placement, json.dumps({"placement": placement}, separators=(",", ":"))))
             if sponsor["is_site_primary"] or sponsor["name"].lower() == "it's made by hand":
                 db.execute("INSERT INTO analytics_events(event_type,object_type,object_id,member_id,source) VALUES ('imbh_click','sponsor',?,?,?)", (sponsor_id, member_id, placement))
         finally:

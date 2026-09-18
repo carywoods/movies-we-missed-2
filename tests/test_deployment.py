@@ -27,5 +27,7 @@ def test_invalid_port_is_rejected(monkeypatch):
 
 
 def test_migration_is_packaged_with_application():
-    assert (MIGRATIONS / "001_initial.sql").exists()
-    assert (MIGRATIONS / "001_initial.sql").read_text() == (__import__("pathlib").Path("migrations/001_initial.sql")).read_text()
+    root = __import__("pathlib").Path("migrations")
+    packaged = {path.name: path.read_text() for path in MIGRATIONS.glob("*.sql")}
+    source = {path.name: path.read_text() for path in root.glob("*.sql")}
+    assert packaged == source

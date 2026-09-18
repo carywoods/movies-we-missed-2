@@ -18,6 +18,7 @@ class NewsletterMixin(AppMixin):
             ("GET", "/newsletter"): self.newsletter_signup_form,
             ("POST", "/newsletter"): self.newsletter_signup,
             ("GET", "/newsletter/unsubscribe"): self.newsletter_unsubscribe,
+            ("POST", "/newsletter/unsubscribe"): self.newsletter_unsubscribe,
             ("GET", "/admin/newsletter"): self.admin_newsletter,
             ("GET", "/admin/newsletter/new"): self.newsletter_issue_form,
             ("POST", "/admin/newsletter/new"): self.save_newsletter_issue,
@@ -71,7 +72,10 @@ class NewsletterMixin(AppMixin):
 
     def newsletter_unsubscribe(self, request):
         from .web import Response
-        token = request.query.get("token", [""])[0]
+        if request.method == "POST":
+            token = (request.form or {}).get("token", "")
+        else:
+            token = request.query.get("token", [""])[0]
         if not token:
             return Response(b"Missing unsubscribe token", 400)
         db = self.db()
@@ -163,25 +167,27 @@ class NewsletterMixin(AppMixin):
             issue["sponsor_name"],
             issue["sponsor_id"],
             unsubscribe_url,
+            self.config.site_url,
         )
         send = f'<form method="post" action="/admin/newsletter/{issue_id}/send"><input type="hidden" name="csrf" value="{request.session["csrf_token"]}"><button>Send issue</button></form>'
         return self.html("Newsletter preview", f'<p class="meta">PREVIEW · {issue["cadence"]}</p>{rendered}{send}', canonical=f"/admin/newsletter/{issue_id}/preview")
 
     @staticmethod
-    def _render_newsletter_html(issue, content_data, sponsor_name, sponsor_id, unsubscribe_url: str) -> str:
+    def _render_newsletter_html(issue, content_data, sponsor_name, sponsor_id, unsubscribe_url: str, site_url: str) -> str:
+        base_url = site_url.rstrip("/")
         movies = "".join(
-            f'<li><a href="/movies/{escape(str(movie["slug"]), quote=True)}">{escape(str(movie["title"]))}</a></li>'
+            f'<li><a href="{base_url}/movies/{escape(str(movie["slug"]), quote=True)}">{escape(str(movie["title"]))}</a></li>'
             for movie in content_data.get("movies", [])
         )
         screenings = "".join(
-            f'<li><a href="/screenings/{escape(str(screening["slug"]), quote=True)}">{escape(str(screening["title"]))}</a></li>'
+            f'<li><a href="{base_url}/screenings/{escape(str(screening["slug"]), quote=True)}">{escape(str(screening["title"]))}</a></li>'
             for screening in content_data.get("screenings", [])
         )
         sponsor = ""
         if sponsor_id and sponsor_name:
             sponsor = (
                 f'<aside class="sponsor">Sponsored by '
-                f'<a rel="sponsored" href="/out/sponsor/{int(sponsor_id)}?placement=newsletter">'
+                f'<a rel="sponsored" href="{base_url}/out/sponsor/{int(sponsor_id)}?placement=newsletter">'
                 f'{escape(str(sponsor_name))}</a></aside>'
             )
         return (
@@ -203,18 +209,34 @@ class NewsletterMixin(AppMixin):
         if provider.name == "disabled":
             return self.html("Email provider disabled", "<h1>Issue remains ready</h1><p>Configure EMAIL_PROVIDER to send. Preview and subscriber management remain available.</p>", canonical="/admin/newsletter")
         db = self.db()
-        sent = 0
         try:
             issue = db.execute("SELECT i.*,s.name sponsor_name FROM newsletter_issues i LEFT JOIN sponsors s ON s.id=i.sponsor_id WHERE i.id=?", (issue_id,)).fetchone()
             if not issue:
                 return Response(b"Not found", 404)
+            if issue["status"] not in {"draft", "ready"}:
+                return Response(b"Issue has already been sent or is currently sending", 409)
             content_data = json.loads(issue["content_json"])
+            claimed = db.execute(
+                "UPDATE newsletter_issues SET status='sending',updated_at=CURRENT_TIMESTAMP WHERE id=? AND status IN ('draft','ready')",
+                (issue_id,),
+            )
+            if not claimed.rowcount:
+                return Response(b"Issue has already been claimed for delivery", 409)
             subscribers = list(db.execute("SELECT id,email FROM newsletter_subscribers WHERE status='active' AND cadence=?", (issue["cadence"],)))
             for subscriber in subscribers:
+                db.execute(
+                    "INSERT INTO newsletter_deliveries(issue_id,subscriber_id,email) VALUES (?,?,?) ON CONFLICT(issue_id,subscriber_id) DO UPDATE SET email=excluded.email,updated_at=CURRENT_TIMESTAMP",
+                    (issue_id, subscriber["id"], subscriber["email"]),
+                )
+            deliveries = list(db.execute(
+                "SELECT d.*,n.email subscriber_email FROM newsletter_deliveries d JOIN newsletter_subscribers n ON n.id=d.subscriber_id WHERE d.issue_id=? AND d.status!='sent' AND n.status='active' AND n.cadence=? ORDER BY d.id",
+                (issue_id, issue["cadence"]),
+            ))
+            for delivery in deliveries:
                 unsubscribe_token = secrets.token_urlsafe(32)
                 db.execute(
                     "UPDATE newsletter_subscribers SET unsubscribe_token_hash=?,updated_at=CURRENT_TIMESTAMP WHERE id=?",
-                    (self._token_hash(unsubscribe_token), subscriber["id"]),
+                    (self._token_hash(unsubscribe_token), delivery["subscriber_id"]),
                 )
                 unsubscribe_url = f'{self.config.site_url.rstrip("/")}/newsletter/unsubscribe?token={unsubscribe_token}'
                 full_html = self._render_newsletter_html(
@@ -223,13 +245,38 @@ class NewsletterMixin(AppMixin):
                     issue["sponsor_name"],
                     issue["sponsor_id"],
                     unsubscribe_url,
+                    self.config.site_url,
                 )
                 headers = {
                     "List-Unsubscribe": f"<{unsubscribe_url}>",
                     "List-Unsubscribe-Post": "List-Unsubscribe=One-Click",
                 }
-                sent += int(provider.send(EmailMessage(subscriber["email"], issue["subject"], full_html, headers)))
-            db.execute("UPDATE newsletter_issues SET status='sent',sent_at=CURRENT_TIMESTAMP,send_count=? WHERE id=?", (sent, issue_id))
+                delivered = False
+                error = None
+                try:
+                    delivered = bool(provider.send(EmailMessage(delivery["subscriber_email"], issue["subject"], full_html, headers)))
+                    if not delivered:
+                        error = "Provider did not accept the message"
+                except Exception as exc:
+                    error = str(exc)[:1000] or exc.__class__.__name__
+                if delivered:
+                    db.execute("UPDATE newsletter_deliveries SET status='sent',attempt_count=attempt_count+1,last_error=NULL,sent_at=CURRENT_TIMESTAMP,updated_at=CURRENT_TIMESTAMP WHERE id=?", (delivery["id"],))
+                else:
+                    db.execute("UPDATE newsletter_deliveries SET status='failed',attempt_count=attempt_count+1,last_error=?,updated_at=CURRENT_TIMESTAMP WHERE id=?", (error, delivery["id"]))
+            totals = db.execute(
+                "SELECT count(*) total,sum(status='sent') sent,sum(status='failed') failed FROM newsletter_deliveries WHERE issue_id=?",
+                (issue_id,),
+            ).fetchone()
+            sent = int(totals["sent"] or 0)
+            failed = int(totals["failed"] or 0)
+            final_status = "sent" if failed == 0 else "ready"
+            db.execute(
+                "UPDATE newsletter_issues SET status=?,sent_at=CASE WHEN ?='sent' THEN CURRENT_TIMESTAMP ELSE NULL END,send_count=?,updated_at=CURRENT_TIMESTAMP WHERE id=?",
+                (final_status, final_status, sent, issue_id),
+            )
+        except Exception:
+            db.execute("UPDATE newsletter_issues SET status='ready',updated_at=CURRENT_TIMESTAMP WHERE id=? AND status='sending'", (issue_id,))
+            raise
         finally:
             db.close()
         return self.redirect("/admin/newsletter")

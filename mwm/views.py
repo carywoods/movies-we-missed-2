@@ -16,7 +16,7 @@ def page(config: Config, title: str, content: str, *, description: str = "Discov
 <title>{escape(title)} · Movies We Missed</title><meta name="description" content="{escape(description)}">
 <meta property="og:title" content="{escape(title)} · Movies We Missed"><meta property="og:description" content="{escape(description)}"><meta property="og:url" content="{escape(canonical_url)}"><meta property="og:type" content="website"><meta property="og:image" content="{config.site_url}/static/icon.svg"><meta name="twitter:card" content="summary">
 <link rel="canonical" href="{escape(canonical_url)}"><link rel="manifest" href="/manifest.webmanifest"><meta name="theme-color" content="#b6402c"><link rel="icon" href="/static/icon.svg" type="image/svg+xml"><link rel="stylesheet" href="/static/site.css"><script type="application/ld+json">{structured}</script>
-</head><body><header><a class="brand" href="/">Movies We Missed</a><nav><a href="/movies">Browse</a><a href="/genres">Genres</a><a href="/collections">Collections</a><a href="/screenings">Screenings</a><a href="/login">Log in</a></nav></header>
+</head><body><header><a class="brand" href="/">Movies We Missed</a><nav><a href="/movies">Browse</a><a href="/genres">Genres</a><a href="/collections">Collections</a><a href="/screenings">Screenings</a><!--member-nav--></nav></header>
 <main>{content}</main><footer><p>Find the film. Join the conversation. Meet at the movies.</p></footer><script>if("serviceWorker" in navigator){{window.addEventListener("load",()=>navigator.serviceWorker.register("/sw.js"))}}</script></body></html>"""
 
 

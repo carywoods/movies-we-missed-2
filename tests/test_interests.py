@@ -22,6 +22,12 @@ def setup_member_app(tmp_path, monkeypatch):
 
 def test_follow_unfollow_movie_and_genre(tmp_path, monkeypatch):
     app, cookie, csrf, movie_id, genre_id = setup_member_app(tmp_path, monkeypatch)
+    _, _, movie_page = request(app, "/movies/interest-movie", cookie=cookie)
+    _, _, genre_page = request(app, "/genres/drama", cookie=cookie)
+    assert f'/movies/{movie_id}/follow'.encode() in movie_page
+    assert f'/genres/{genre_id}/follow'.encode() in genre_page
+    assert b'href="/discover"' in movie_page and b'href="/profile"' in movie_page
+    assert b'href="/login"' not in movie_page
     assert request(app, f"/movies/{movie_id}/follow", "POST", {"csrf": csrf}, cookie)[0] == 303
     assert request(app, f"/genres/{genre_id}/follow", "POST", {"csrf": csrf}, cookie)[0] == 303
     status, _, feed = request(app, "/discover", cookie=cookie)
@@ -43,3 +49,12 @@ def test_follows_require_member_and_csrf(tmp_path, monkeypatch):
 def test_only_movie_and_genre_targets_are_supported(tmp_path, monkeypatch):
     app, cookie, csrf, _, _ = setup_member_app(tmp_path, monkeypatch)
     assert request(app, "/members/1/follow", "POST", {"csrf": csrf}, cookie)[0] == 404
+
+
+def test_follow_redirect_rejects_external_referer(tmp_path, monkeypatch):
+    app, cookie, csrf, movie_id, _ = setup_member_app(tmp_path, monkeypatch)
+    status, headers, _ = request(
+        app, f"/movies/{movie_id}/follow", "POST", {"csrf": csrf}, cookie,
+        {"HTTP_REFERER": "https://evil.example/phish"},
+    )
+    assert status == 303 and headers["Location"] == "/discover"

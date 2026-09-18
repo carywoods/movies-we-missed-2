@@ -73,7 +73,7 @@ class AdminMixin(AppMixin):
             db.close()
         genre_fields = "".join(f'<label class="check"><input type="checkbox" name="genre_{g["id"]}" value="1"{" checked" if g["selected"] else ""}>{escape(g["name"])}</label>' for g in genres)
         collection_fields = "".join(f'<label class="check"><input type="checkbox" name="collection_{c["id"]}" value="1"{" checked" if c["selected"] else ""}>{escape(c["name"])}</label>' for c in collections)
-        fields = f'<label>Title<input name="title" value="{escape(movie["title"])}" required></label><label>Year<input name="release_year" type="number" value="{movie["release_year"] or ""}"></label><label>Synopsis<textarea name="synopsis">{escape(movie["synopsis"] or "")}</textarea></label><label class="check"><input type="checkbox" name="published" value="1"{" checked" if movie["published"] else ""}> Public</label><label class="check"><input type="checkbox" name="featured" value="1"{" checked" if movie["featured"] else ""}> Featured</label><label class="check"><input type="checkbox" name="adult_content" value="1"{" checked" if movie["adult_content"] else ""}> Adult labeled</label><fieldset><legend>Genres</legend>{genre_fields}</fieldset><fieldset><legend>Collections</legend>{collection_fields}</fieldset>'
+        fields = f'<label>Title<input name="title" value="{escape(movie["title"])}" required></label><label>Year<input name="release_year" type="number" value="{movie["release_year"] or ""}"></label><label>Synopsis<textarea name="synopsis">{escape(movie["synopsis"] or "")}</textarea></label><label class="check"><input type="checkbox" name="published" value="1"{" checked" if movie["published"] else ""}> Public</label><label class="check"><input type="checkbox" name="featured" value="1"{" checked" if movie["featured"] else ""}> Featured</label><fieldset><legend>Genres</legend>{genre_fields}</fieldset><fieldset><legend>Collections</legend>{collection_fields}</fieldset>'
         return self.form_page(request, "Edit movie", fields, f"/admin/movies/{movie_id}/edit")
 
     def save_admin_movie(self, request, movie_id: int):
@@ -92,7 +92,7 @@ class AdminMixin(AppMixin):
             return Response(b"Invalid title or year", 400)
         db = self.db()
         try:
-            db.execute("UPDATE movies SET title=?,release_year=?,synopsis=?,published=?,featured=?,adult_content=?,updated_at=CURRENT_TIMESTAMP WHERE id=?", (title, year, request.form.get("synopsis", "").strip()[:5000], int(request.form.get("published") == "1"), int(request.form.get("featured") == "1"), int(request.form.get("adult_content") == "1"), movie_id))
+            db.execute("UPDATE movies SET title=?,release_year=?,synopsis=?,published=?,featured=?,updated_at=CURRENT_TIMESTAMP WHERE id=?", (title, year, request.form.get("synopsis", "").strip()[:5000], int(request.form.get("published") == "1"), int(request.form.get("featured") == "1"), movie_id))
             genre_ids = {row[0] for row in db.execute("SELECT id FROM genres")}
             collection_ids = {row[0] for row in db.execute("SELECT id FROM collections")}
             db.execute("DELETE FROM movie_genres WHERE movie_id=? AND source='editorial'", (movie_id,))
@@ -132,7 +132,7 @@ class AdminMixin(AppMixin):
             db.close()
         options = '<option value="">Universal fallback</option>' + "".join(f'<option value="{m["id"]}">{escape(m["title"])}</option>' for m in movies)
         fields = f'<label>Movie<select name="movie_id">{options}</select></label><label>Merchant<input name="merchant" required value="Amazon"></label><label>Label<input name="display_label" required></label><label>Product type<input name="product_type" required value="movie"></label><label>Destination URL<input type="url" name="destination_url" required></label><label>Match<select name="match_type"><option>specific</option><option>contextual</option><option>fallback</option></select></label>'
-        form = self.form_page(request, "Add merchandise", fields, "/admin/merchandise").body.decode()
+        form = self.form_markup(request, "Add merchandise", fields, "/admin/merchandise")
         rows = "".join(f'<tr><td>{escape(o["movie_title"] or "All movies")}</td><td>{escape(o["display_label"])}</td><td>{escape(o["merchant"])}</td></tr>' for o in offers)
         return self.html("Merchandise", f'<h1>Merchandise</h1>{form}<table><tr><th>Movie</th><th>Offer</th><th>Merchant</th></tr>{rows}</table>', canonical="/admin/merchandise")
 
@@ -166,7 +166,7 @@ class AdminMixin(AppMixin):
         finally:
             db.close()
         fields = '<label>Name<input name="name" required></label><label>Destination URL<input name="destination_url" type="url" required></label><label>Label<input name="label" value="Presented by"></label><label class="check"><input name="paid" value="1" type="checkbox"> Paid sponsor</label>'
-        form = self.form_page(request, "Add sponsor", fields, "/admin/sponsors").body.decode()
+        form = self.form_markup(request, "Add sponsor", fields, "/admin/sponsors")
         rows = "".join(f'<tr><td>{escape(s["name"])}</td><td>{"paid" if s["paid"] else "house"}</td><td>{"active" if s["active"] else "inactive"}</td></tr>' for s in sponsors)
         return self.html("Sponsors", f'<h1>Sponsors</h1>{form}<table><tr><th>Name</th><th>Type</th><th>Status</th></tr>{rows}</table>', canonical="/admin/sponsors")
 

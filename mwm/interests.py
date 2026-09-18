@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from .mixins import AppMixin
+from .mixins import AppMixin, safe_redirect_target
 
 import re
 
@@ -41,7 +41,7 @@ class InterestMixin(AppMixin):
                 db.execute("DELETE FROM follows WHERE member_id=? AND target_type=? AND target_id=?", (request.member["member_id"], target_type, target_id))
         finally:
             db.close()
-        return self.redirect(request.environ.get("HTTP_REFERER", "/discover"))
+        return self.redirect(safe_redirect_target(request.environ.get("HTTP_REFERER"), "/discover"))
 
     def discovery(self, request):
         if not request.member:

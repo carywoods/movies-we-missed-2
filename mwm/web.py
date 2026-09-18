@@ -1,7 +1,10 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import re
+import threading
+import time
 from dataclasses import dataclass
 from html import escape
 from http import HTTPStatus
@@ -54,6 +57,8 @@ Handler = Callable[[Request], Response]
 class Application(MemberMixin, InterestMixin, CommentMixin, ScreeningMixin, CommerceMixin, SponsorMixin, NewsletterMixin, AnalyticsMixin, SeoMixin, AdminMixin):
     def __init__(self, config: Config):
         self.config = config
+        self._auth_failures: dict[str, list[float]] = {}
+        self._auth_lock = threading.Lock()
         initialize(config)
         ensure_admin(config)
         self.routes: dict[tuple[str, str], Handler] = {
@@ -78,6 +83,35 @@ class Application(MemberMixin, InterestMixin, CommentMixin, ScreeningMixin, Comm
 
     def db(self):
         return connect(self.config.database_path)
+
+    def _auth_client_key(self, request: Request) -> str:
+        address = request.environ.get("REMOTE_ADDR", "")
+        if self.config.trust_proxy:
+            forwarded = request.environ.get("HTTP_X_FORWARDED_FOR", "")
+            if forwarded:
+                address = forwarded.split(",", 1)[0].strip()
+        return hashlib.sha256(f"{self.config.session_secret}\0{address}".encode()).hexdigest()
+
+    def auth_rate_limited(self, request: Request) -> bool:
+        key = self._auth_client_key(request)
+        cutoff = time.monotonic() - 900
+        with self._auth_lock:
+            recent = [timestamp for timestamp in self._auth_failures.get(key, []) if timestamp >= cutoff]
+            if recent:
+                self._auth_failures[key] = recent
+            else:
+                self._auth_failures.pop(key, None)
+            return len(recent) >= 5
+
+    def record_auth_failure(self, request: Request) -> None:
+        key = self._auth_client_key(request)
+        with self._auth_lock:
+            self._auth_failures.setdefault(key, []).append(time.monotonic())
+
+    def clear_auth_failures(self, request: Request) -> None:
+        key = self._auth_client_key(request)
+        with self._auth_lock:
+            self._auth_failures.pop(key, None)
 
     def health(self, request: Request) -> Response:
         connection = connect(self.config.database_path)
@@ -136,7 +170,7 @@ class Application(MemberMixin, InterestMixin, CommentMixin, ScreeningMixin, Comm
         content = f'<h1>{escape(title)}</h1><div class="chips">' + "".join(f'<a href="{path}/{item["slug"]}">{escape(item["name"])}</a>' for item in items) + "</div>"
         return self.html(title, content, canonical=path)
 
-    def movie_detail(self, slug: str) -> Response:
+    def movie_detail(self, request: Request, slug: str) -> Response:
         db = self.db()
         try:
             movie = db.execute("SELECT * FROM movies WHERE slug=? AND published=1 AND adult_content=0", (slug,)).fetchone()
@@ -144,31 +178,35 @@ class Application(MemberMixin, InterestMixin, CommentMixin, ScreeningMixin, Comm
                 return Response(b"Not found", 404)
             genres = list(db.execute("SELECT g.* FROM genres g JOIN movie_genres mg ON mg.genre_id=g.id WHERE mg.movie_id=? ORDER BY g.name", (movie["id"],)))
             collections = list(db.execute("SELECT c.* FROM collections c JOIN movie_collections mc ON mc.collection_id=c.id WHERE mc.movie_id=? AND c.adult_only=0 ORDER BY c.name", (movie["id"],)))
+            followed = bool(request.member and db.execute("SELECT 1 FROM follows WHERE member_id=? AND target_type='movie' AND target_id=?", (request.member["member_id"], movie["id"])).fetchone())
         finally:
             db.close()
         year = f' <span class="meta">({movie["release_year"]})</span>' if movie["release_year"] else ""
         chips = "".join(f'<a href="/genres/{x["slug"]}">{x["name"]}</a>' for x in genres) + "".join(f'<a href="/collections/{x["slug"]}">{x["name"]}</a>' for x in collections)
-        content = f'<article class="detail"><p class="meta">MOVIE</p><h1>{escape(movie["title"])}{year}</h1><p>{escape(movie["synopsis"] or "A movie waiting to be rediscovered and discussed.")}</p><div class="chips">{chips}</div></article>'
+        follow = self.follow_control(request, "movie", movie["id"], followed) if request.member else '<p><a href="/login">Log in</a> to follow this movie.</p>'
+        content = f'<article class="detail"><p class="meta">MOVIE</p><h1>{escape(movie["title"])}{year}</h1><p>{escape(movie["synopsis"] or "A movie waiting to be rediscovered and discussed.")}</p><div class="chips">{chips}</div>{follow}</article>'
         content += f'<p><a href="/movies/{slug}/comments">Join the discussion</a></p>' + self.commerce_panel(movie["id"])
         return self.html(movie["title"], content, description=movie["synopsis"] or f'Discover {movie["title"]} at Movies We Missed.', canonical=f'/movies/{slug}')
 
-    def taxonomy_detail(self, table: str, join_table: str, foreign_key: str, path: str, slug: str) -> Response:
+    def taxonomy_detail(self, request: Request, table: str, join_table: str, foreign_key: str, path: str, slug: str) -> Response:
         db = self.db()
         try:
             item = db.execute(f"SELECT * FROM {table} WHERE slug=?", (slug,)).fetchone()
             if not item or ("adult_only" in item.keys() and item["adult_only"]):
                 return Response(b"Not found", 404)
             movies = list(db.execute(f"SELECT m.* FROM movies m JOIN {join_table} j ON j.movie_id=m.id WHERE j.{foreign_key}=? AND m.published=1 AND m.adult_content=0 ORDER BY m.title", (item["id"],)))
+            followed = bool(table == "genres" and request.member and db.execute("SELECT 1 FROM follows WHERE member_id=? AND target_type='genre' AND target_id=?", (request.member["member_id"], item["id"])).fetchone())
         finally:
             db.close()
-        content = f'<h1>{escape(item["name"])}</h1><p>{escape(item["description"])}</p>{movie_grid(movies)}'
+        follow = self.follow_control(request, "genre", item["id"], followed) if table == "genres" and request.member else ""
+        content = f'<h1>{escape(item["name"])}</h1><p>{escape(item["description"])}</p>{follow}{movie_grid(movies)}'
         return self.html(item["name"], content, description=item["description"], canonical=f'{path}/{slug}')
 
     def dispatch_dynamic(self, request: Request) -> Response | None:
         patterns = (
-            (r"/movies/([^/]+)", lambda slug: self.movie_detail(slug)),
-            (r"/genres/([^/]+)", lambda slug: self.taxonomy_detail("genres", "movie_genres", "genre_id", "/genres", slug)),
-            (r"/collections/([^/]+)", lambda slug: self.taxonomy_detail("collections", "movie_collections", "collection_id", "/collections", slug)),
+            (r"/movies/([^/]+)", lambda slug: self.movie_detail(request, slug)),
+            (r"/genres/([^/]+)", lambda slug: self.taxonomy_detail(request, "genres", "movie_genres", "genre_id", "/genres", slug)),
+            (r"/collections/([^/]+)", lambda slug: self.taxonomy_detail(request, "collections", "movie_collections", "collection_id", "/collections", slug)),
         )
         if request.method == "GET":
             for pattern, callback in patterns:
@@ -184,7 +222,10 @@ class Application(MemberMixin, InterestMixin, CommentMixin, ScreeningMixin, Comm
             query=parse_qs(environ.get("QUERY_STRING", ""), keep_blank_values=True),
             environ=environ,
         )
-        length = min(int(environ.get("CONTENT_LENGTH") or 0), 64_000)
+        try:
+            length = min(max(0, int(environ.get("CONTENT_LENGTH") or 0)), 64_000)
+        except (TypeError, ValueError):
+            length = 0
         if request.method in {"POST", "PUT", "PATCH"}:
             stream = environ.get("wsgi.input")
             raw_body = stream.read(length) if stream else b""
@@ -201,6 +242,13 @@ class Application(MemberMixin, InterestMixin, CommentMixin, ScreeningMixin, Comm
         response = handler(request) if handler else self.dispatch_admin(request) or self.dispatch_newsletter(request) or self.dispatch_sponsors(request) or self.dispatch_commerce(request) or self.dispatch_comments(request) or self.dispatch_screenings(request) or self.dispatch_interest(request) or self.dispatch_dynamic(request) or Response(b"Not found", 404)
         if fresh_token and not any(name.lower() == "set-cookie" for name, _ in response.headers):
             response.headers = (*response.headers, cookie_header(self.config, fresh_token))
+        if response.content_type.startswith("text/html"):
+            if request.member:
+                admin = '<a href="/admin">Admin</a>' if request.member["role"] in {"editor", "admin"} else ""
+                member_nav = f'<a href="/discover">For you</a><a href="/profile">Profile</a>{admin}'
+            else:
+                member_nav = '<a href="/login">Log in</a>'
+            response.body = response.body.replace(b"<!--member-nav-->", member_nav.encode())
         self.track_response(request, response)
         phrase = HTTPStatus(response.status).phrase
         headers = [("Content-Type", response.content_type), ("Content-Length", str(len(response.body))), *response.headers]

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from .mixins import AppMixin
+from .mixins import AppMixin, safe_redirect_target
 
 import re
 from html import escape
@@ -49,7 +49,17 @@ class CommentMixin(AppMixin):
             db.close()
         has_more = not show_all and len(comments) > 5
         comments = comments[:5] if not show_all else comments
-        items = "".join(f'<article class="comment"><h3>{escape(c["display_name"])}</h3><p>{escape(c["body"])}</p><small>{c["created_at"]}</small></article>' for c in comments) or "<p>No comments yet. Start the conversation.</p>"
+        rendered_comments = []
+        for comment in comments:
+            report = ""
+            if request.member and comment["member_id"] != request.member["member_id"]:
+                report = (
+                    f'<form class="inline" method="post" action="/comments/{comment["id"]}/report">'
+                    f'<input type="hidden" name="csrf" value="{request.session["csrf_token"]}">'
+                    '<input type="hidden" name="reason" value="Flagged from discussion"><button type="submit">Report</button></form>'
+                )
+            rendered_comments.append(f'<article class="comment"><h3>{escape(comment["display_name"])}</h3><p>{escape(comment["body"])}</p><small>{comment["created_at"]}</small>{report}</article>')
+        items = "".join(rendered_comments) or "<p>No comments yet. Start the conversation.</p>"
         more = f'<a class="button" href="{request.path}?all=1">View more comments</a>' if has_more else ""
         form = ""
         if request.member:
@@ -73,7 +83,7 @@ class CommentMixin(AppMixin):
             db.execute("INSERT OR IGNORE INTO comment_reports(comment_id,reporter_id,reason) VALUES (?,?,?)", (comment_id, request.member["member_id"], reason or "Needs moderator review"))
         finally:
             db.close()
-        return self.redirect(request.environ.get("HTTP_REFERER", "/"))
+        return self.redirect(safe_redirect_target(request.environ.get("HTTP_REFERER"), "/"))
 
     def moderation_queue(self, request):
         if not request.member or request.member["role"] not in {"moderator", "admin"}:

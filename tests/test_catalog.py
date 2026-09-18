@@ -32,9 +32,9 @@ def test_search_and_canonical(tmp_path, monkeypatch):
     assert b'rel="canonical"' in found
 
 
-def test_adult_movies_are_not_public_by_default(tmp_path, monkeypatch):
+def test_explicit_safety_flag_hides_a_record(tmp_path, monkeypatch):
     app = catalog_app(tmp_path, monkeypatch)
     db = connect(app.config.database_path)
-    db.execute("INSERT INTO movies(stable_id,title,slug,parsing_confidence,adult_content) VALUES ('adult','Private Movie','private-movie','high',1)")
+    db.execute("INSERT INTO movies(stable_id,title,slug,parsing_confidence,adult_content) VALUES ('restricted','Restricted Record','restricted-record','high',1)")
     db.close()
-    assert request(app, "/movies/private-movie")[0] == 404
+    assert request(app, "/movies/restricted-record")[0] == 404

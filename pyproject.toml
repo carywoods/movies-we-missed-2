@@ -9,6 +9,12 @@ description = "A movie club and interest-based social network."
 requires-python = ">=3.11"
 dependencies = []
 
+[project.optional-dependencies]
+dev = [
+    "mypy>=1.11,<2",
+    "pytest>=8,<9",
+]
+
 [project.scripts]
 mwm-server = "mwm.__main__:main"
 mwm-import = "mwm.importer:main"

@@ -38,14 +38,14 @@ python -m pytest -q              # complete test suite
 
 ## Configuration and deployment
 
-See `.env.example`. Optional email, metadata, and model providers default to `disabled`, so credentials are never required for startup.
+See `.env.example`. Email supports disabled, console, and standard SMTP providers; metadata and model providers remain optional. Credentials are never required for startup.
 
 For production, set an HTTPS `SITE_URL`, a unique 32+ character `SESSION_SECRET`, and `DATABASE_PATH` on a persistent local volume. See [DEPLOYMENT.md](DEPLOYMENT.md) for Coolify and [OPERATIONS.md](OPERATIONS.md) for persistence and backup procedures.
 
 ## Product boundaries
 
 - Members follow movies and genres only; no person-following graph exists.
-- Adult-labeled records remain outside anonymous discovery and the sitemap.
+- Erotica and LGBQ Stories are public editorial collections; the inventory contains no adult-film category.
 - Every public movie resolves at least the universal popcorn offer.
 - Analytics do not retain IP addresses or user-agent strings.
 - Sponsor and merchandise exits are centralized, validated, and measured.

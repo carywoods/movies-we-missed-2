@@ -35,8 +35,10 @@ COLLECTION_MAP = {
     "bc": ("Black Cinema",),
     "classics": ("Classics",),
     "k and a": ("Kids and Animation",),
-    "soft": ("Adult & Erotic Cinema",),
+    "soft": ("Erotica",),
     "someday": ("Better With a Couple of Beers",),
+    "new": ("Recent Additions",),
+    "comics": ("Comics & Graphic Novels",),
 }
 
 
@@ -63,7 +65,10 @@ def slugify(value: str) -> str:
 def parse_filename(filename: str) -> tuple[str, int | None, str]:
     stem = Path(filename).stem
     stem = LEADING_RE.sub("", stem).replace("_", " ").replace(".", " ")
-    match = YEAR_RE.search(stem)
+    matches = list(YEAR_RE.finditer(stem))
+    match = matches[-1] if matches else None
+    if match and match.start() == 0 and len(matches) == 1:
+        match = None
     year = int(match.group(1)) if match else None
     title_part = stem[: match.start()] if match else stem
     title_part = NOISE_RE.sub("", title_part)
@@ -125,7 +130,7 @@ def import_inventory(csv_path: Path, config: Config | None = None) -> ImportRepo
                             confidence,
                             "review" if confidence == "low" else "pending",
                             "new" if category == "new" else None,
-                            int(category == "soft"),
+                            0,
                             int(category == "k and a"),
                             int(confidence != "low"),
                         ),

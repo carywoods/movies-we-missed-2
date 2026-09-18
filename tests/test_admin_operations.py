@@ -24,7 +24,10 @@ def admin_fixture(tmp_path, monkeypatch):
 def test_operator_dashboard_and_domain_pages(tmp_path, monkeypatch):
     app, cookie, _, _, _, _ = admin_fixture(tmp_path, monkeypatch)
     for path in ("/admin", "/admin/movies", "/admin/import-review", "/admin/screenings", "/admin/merchandise", "/admin/comments", "/admin/newsletter", "/admin/sponsors", "/admin/analytics"):
-        assert request(app, path, cookie=cookie)[0] == 200, path
+        status, _, body = request(app, path, cookie=cookie)
+        assert status == 200, path
+        assert body.lower().count(b"<!doctype html>") == 1, path
+        assert b'href="/admin"' in body
 
 
 def test_movie_edit_and_classification(tmp_path, monkeypatch):
