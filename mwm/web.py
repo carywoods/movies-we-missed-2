@@ -130,7 +130,7 @@ class Application(MemberMixin, InterestMixin, CommentMixin, ScreeningMixin, Comm
     def home(self, request: Request) -> Response:
         db = self.db()
         try:
-            movies = list(db.execute("SELECT * FROM movies WHERE published=1 AND adult_content=0 ORDER BY featured DESC, created_at DESC, title LIMIT 12"))
+            movies = list(db.execute("SELECT * FROM movies WHERE published=1 AND adult_content=0 AND poster_url IS NOT NULL ORDER BY featured DESC, id DESC LIMIT 12"))
         finally:
             db.close()
         content = '<section class="hero"><p>THE MOVIE CLUB FOR THE ONES THAT GOT AWAY</p><h1>There’s always another great movie.</h1><p>Explore overlooked films, follow what interests you, and meet up at the movies.</p><a class="button" href="/movies">Browse the catalog</a></section><section><h2>Recently added</h2>' + movie_grid(movies) + "</section>"

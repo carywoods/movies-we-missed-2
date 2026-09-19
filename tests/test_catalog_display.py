@@ -65,3 +65,34 @@ def test_fallback_tile_for_missing_artwork(tmp_path, monkeypatch):
     _, _, body = request(app, "/movies")
     assert b"Plain Movie" in body
     assert b"image.tmdb.org" not in body
+
+
+def test_card_synopsis_is_trimmed_to_a_teaser(tmp_path, monkeypatch):
+    monkeypatch.setenv("DATABASE_PATH", str(tmp_path / "teaser.db"))
+    monkeypatch.setenv("METADATA_PROVIDER", "disabled")
+    app = create_app(Config.from_env())
+    long_text = " ".join(f"word{index}" for index in range(80))
+    db = connect(app.config.database_path)
+    db.execute(
+        "INSERT INTO movies(stable_id,title,slug,synopsis,parsing_confidence) "
+        "VALUES ('teaser','Long Synopsis Movie','long-synopsis-movie',?,'high')",
+        (long_text,),
+    )
+    db.close()
+    _, _, body = request(app, "/movies")
+    text = body.decode()
+    assert "Long Synopsis Movie" in text
+    assert "…" in text
+    assert "word79" not in text
+    assert 'class="summary"' in text
+
+
+def test_home_shows_only_artwork_ready_movies(tmp_path, monkeypatch):
+    app = display_fixture(tmp_path, monkeypatch)
+    db = connect(app.config.database_path)
+    db.execute("INSERT INTO movies(stable_id,title,slug,parsing_confidence) VALUES ('noposter','No Poster Movie','no-poster-movie','high')")
+    db.close()
+    _, _, body = request(app, "/")
+    text = body.decode()
+    assert "Clean Title" in text
+    assert "No Poster Movie" not in text

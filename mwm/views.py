@@ -16,13 +16,23 @@ def field(movie, name: str):
         return None
 
 
+def teaser(text: str, limit: int = 130) -> str:
+    """Trim a synopsis to a readable card teaser at a word boundary."""
+    text = " ".join(str(text).split())
+    if len(text) <= limit:
+        return text
+    cut = text[:limit].rsplit(" ", 1)[0].rstrip(" ,;:.")
+    return f"{cut}…"
+
+
 def movie_poster(movie, *, css_class: str = "") -> str:
     url = field(movie, "poster_url")
     title = str(field(movie, "title") or "Movie")
     classes = f"poster {css_class}".strip()
     if url:
         return f'<div class="{classes}"><img src="{escape(str(url), quote=True)}" alt="Poster for {escape(title)}" loading="lazy"></div>'
-    return f'<div class="{classes}" aria-hidden="true">{escape(title[:1].upper())}</div>'
+    initial = next((character.upper() for character in title if character.isalpha()), "")
+    return f'<div class="{classes}" aria-hidden="true">{escape(initial)}</div>'
 
 
 def page(config: Config, title: str, content: str, *, description: str = "Discover movies, screenings, and conversation.", canonical: str = "/", image: str | None = None) -> str:
@@ -43,7 +53,8 @@ def movie_card(movie) -> str:
     year = f" <span>({movie['release_year']})</span>" if movie["release_year"] else ""
     director = field(movie, "director")
     credits = f'<p class="meta">Directed by {escape(str(director))}</p>' if director else ""
-    return f'<article class="card">{movie_poster(movie)}<div><h3><a href="/movies/{escape(movie["slug"])}">{escape(movie["title"])}</a>{year}</h3>{credits}<p>{escape(movie["synopsis"] or "A movie waiting to be rediscovered.")}</p></div></article>'
+    summary = teaser(movie["synopsis"] or "A movie waiting to be rediscovered.")
+    return f'<article class="card">{movie_poster(movie)}<div><h3><a href="/movies/{escape(movie["slug"])}">{escape(movie["title"])}</a>{year}</h3>{credits}<p class="summary">{escape(summary)}</p></div></article>'
 
 
 def movie_grid(movies) -> str:
