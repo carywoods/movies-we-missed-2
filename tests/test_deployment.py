@@ -64,11 +64,13 @@ def test_coolify_seed_has_catalog_without_private_data():
         db.close()
 
 
-def test_docker_entrypoint_seeds_only_a_missing_database():
+def test_docker_entrypoint_seeds_missing_database_and_supports_force_seed():
     dockerfile = Path("Dockerfile").read_text()
     entrypoint = Path("deploy/docker-entrypoint.sh").read_text()
     assert "COPY deploy/mwm-seed.db /app/seed/mwm.db" in dockerfile
-    assert 'if [ ! -e "$database_path" ]; then' in entrypoint
+    assert '[ ! -e "$database_path" ]; then' in entrypoint
+    assert 'cp /app/seed/mwm.db "$database_path"' in entrypoint
+    assert 'FORCE_SEED' in entrypoint
 
 
 def test_metadata_worker_flag(monkeypatch):

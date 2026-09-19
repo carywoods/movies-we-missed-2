@@ -37,6 +37,22 @@ Titles, artwork, synopses, and credits are enriched from TMDB.
 4. An already-populated volume is not replaced by a new seed. It fills itself via the worker, the CLI, or the admin console. A fresh volume starts from the pre-enriched seed snapshot.
 5. The catalog pages show the TMDB attribution line whenever `METADATA_PROVIDER=tmdb`. Keep it — it is required by the TMDB terms of use.
 
+## Resetting the live database
+
+The entrypoint seeds the bundled catalog only when the database file does not
+exist, so an existing volume keeps its data across deploys. To force the bundled
+catalog back over an existing database (recovery, or after a bad import):
+
+1. Set `FORCE_SEED=1` in the environment and restart the app.
+2. The boot log prints `entrypoint: FORCE_SEED=1 - replacing ...` and the database
+   (plus any WAL sidecars) is replaced with the bundled snapshot.
+3. Remove `FORCE_SEED` (or set it to `0`) so later boots keep your data again.
+
+This deletes whatever the live database holds (members, comments, reviews). It is
+the deterministic alternative to deleting the volume or removing the database file
+by hand — do not `rm` the database inside a running container: the app can
+recreate an empty database before the next boot and the seed step will skip it.
+
 ## Nixpacks/Python alternative
 
 - Build command: `python -m pip install .`
