@@ -1,3 +1,6 @@
+import sqlite3
+from pathlib import Path
+
 from mwm.config import Config
 from mwm.web import create_app
 from mwm.db import MIGRATIONS
@@ -31,3 +34,38 @@ def test_migration_is_packaged_with_application():
     packaged = {path.name: path.read_text() for path in MIGRATIONS.glob("*.sql")}
     source = {path.name: path.read_text() for path in root.glob("*.sql")}
     assert packaged == source
+
+
+def test_coolify_seed_has_catalog_without_private_data():
+    seed = Path("deploy/mwm-seed.db")
+    assert seed.is_file()
+    db = sqlite3.connect(seed)
+    try:
+        assert db.execute("PRAGMA integrity_check").fetchone()[0] == "ok"
+        assert db.execute("SELECT count(*) FROM movies").fetchone()[0] == 1122
+        assert db.execute("SELECT count(*) FROM movies WHERE adult_content=1").fetchone()[0] == 0
+        private_tables = (
+            "analytics_events",
+            "audit_log",
+            "comment_reports",
+            "comments",
+            "follows",
+            "members",
+            "newsletter_deliveries",
+            "newsletter_subscribers",
+            "notifications",
+            "password_reset_tokens",
+            "rsvps",
+            "sessions",
+        )
+        for table in private_tables:
+            assert db.execute(f"SELECT count(*) FROM {table}").fetchone()[0] == 0
+    finally:
+        db.close()
+
+
+def test_docker_entrypoint_seeds_only_a_missing_database():
+    dockerfile = Path("Dockerfile").read_text()
+    entrypoint = Path("deploy/docker-entrypoint.sh").read_text()
+    assert "COPY deploy/mwm-seed.db /app/seed/mwm.db" in dockerfile
+    assert 'if [ ! -e "$database_path" ]; then' in entrypoint

@@ -3,6 +3,7 @@
 .env_draft
 !.env.example
 *.db
+!deploy/mwm-seed.db
 *.db-*
 *.sqlite
 *.sqlite3

@@ -5,6 +5,7 @@ data
 backups
 tests
 *.db*
+!deploy/mwm-seed.db
 __pycache__
 .pytest_cache
 dist
