@@ -84,9 +84,10 @@ Run resumed on 2026-09-16 from the existing Stage 1 repository state.
 - Status: complete
 - `compileall`: passed for application and tests.
 - `mypy`: passed with no issues across 22 source files.
-- Test suite: 54 passed, covering migrations/upgrades, importer, authentication/recovery/throttling, routes, interests, comments, screenings, commerce, sponsorship, newsletter/SMTP, analytics, SEO/PWA, admin, backups, and deployment configuration.
+- Test suite: 56 passed, covering migrations/upgrades, importer, authentication/recovery/throttling, routes, interests, comments, screenings, commerce, sponsorship, newsletter/SMTP, analytics, SEO/PWA, admin, backups, deployment configuration, and Coolify seed privacy/integrity.
 - Actual importer rerun: 1,625 rows processed; 1,122 unique imports; 10 duplicates; 493 educational exclusions.
 - Local database migration: integrity passed; all 46 `soft` records are public Erotica with zero legacy flags; 434 unique `new` and 37 unique `comics` movies were backfilled into public collections; LGBQ Stories was seeded.
 - Production wheel built, installed into a clean virtual environment, started outside the source tree, initialized packaged migrations, and returned HTTP 200 from `/health`.
+- Docker image built with a sanitized 1,122-title catalog seed. A fresh named volume served `/health` and `/movies`, bootstrapped an administrator from environment variables, and preserved a database marker across a second container run.
 - Tracked-file scans found no secrets or NAS paths. The private inventory remains locally available but is removed from Git tracking and ignored.
 - Approximate paid API consumption: $0.00. No paid or external API was called.

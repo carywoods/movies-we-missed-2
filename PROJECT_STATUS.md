@@ -1,7 +1,7 @@
 # Project Status
 
 First-run definition of done: **implemented and verified**.
-Last verified 2026-09-18: 54 tests, clean type/compile checks, isolated wheel install, production health check, and local database migration/integrity verification.
+Last verified 2026-09-18: 56 tests, clean type/compile checks, isolated wheel install, production health check, local database migration/integrity verification, and seeded Docker volume persistence.
 
 
 | Area | Status | Evidence |
@@ -18,6 +18,6 @@ Last verified 2026-09-18: 54 tests, clean type/compile checks, isolated wheel in
 | Analytics | Complete | Required event catalog and reporting |
 | SEO/PWA | Complete | Metadata, sitemap, manifest, worker, offline |
 | Admin/operations | Complete | Unified dashboard, backups, persistence docs |
-| Coolify | Complete | Docker/env/volume/health documentation |
+| Coolify | Complete | Sanitized 1,122-title seed, Docker/env/volume contract, health and redeploy-persistence checks |
 
 External enrichment and outbound email remain intentionally disabled until optional providers are configured. Core behavior does not depend on them.
