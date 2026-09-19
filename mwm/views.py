@@ -44,22 +44,40 @@ def page(config: Config, title: str, content: str, *, description: str = "Discov
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>{escape(title)} · Movies We Missed</title><meta name="description" content="{escape(description)}">
 <meta property="og:title" content="{escape(title)} · Movies We Missed"><meta property="og:description" content="{escape(description)}"><meta property="og:url" content="{escape(canonical_url)}"><meta property="og:type" content="website"><meta property="og:image" content="{escape(og_image)}"><meta name="twitter:card" content="summary"><meta name="twitter:image" content="{escape(og_image)}">
-<link rel="canonical" href="{escape(canonical_url)}"><link rel="manifest" href="/manifest.webmanifest"><meta name="theme-color" content="#b6402c"><link rel="icon" href="/static/icon.svg" type="image/svg+xml"><link rel="stylesheet" href="/static/site.css"><script type="application/ld+json">{structured}</script>
+<link rel="canonical" href="{escape(canonical_url)}"><link rel="manifest" href="/manifest.webmanifest"><meta name="theme-color" content="#b6402c"><link rel="icon" href="/static/icon.svg" type="image/svg+xml"><link rel="stylesheet" href="/static/site.css"><script src="/static/site.js" defer></script><script type="application/ld+json">{structured}</script>
 </head><body><header><a class="brand" href="/">Movies We Missed</a><nav><a href="/movies">Browse</a><a href="/genres">Genres</a><a href="/collections">Collections</a><a href="/screenings">Screenings</a><!--member-nav--></nav></header>
 <main>{content}</main><footer><p>Find the film. Join the conversation. Meet at the movies.</p>{attribution}</footer><script>if("serviceWorker" in navigator){{window.addEventListener("load",()=>navigator.serviceWorker.register("/sw.js"))}}</script></body></html>"""
 
 
 def movie_card(movie) -> str:
-    year = f" <span>({movie['release_year']})</span>" if movie["release_year"] else ""
+    slug = escape(movie["slug"])
+    year = f' <span class="year">({movie["release_year"]})</span>' if movie["release_year"] else ""
     director = field(movie, "director")
     credits = f'<p class="meta">Directed by {escape(str(director))}</p>' if director else ""
     summary = teaser(movie["synopsis"] or "A movie waiting to be rediscovered.")
-    return f'<article class="card">{movie_poster(movie)}<div><h3><a href="/movies/{escape(movie["slug"])}">{escape(movie["title"])}</a>{year}</h3>{credits}<p class="summary">{escape(summary)}</p></div></article>'
+    return (
+        f'<article class="card">'
+        f'<a class="poster-link" href="/movies/{slug}" tabindex="-1" aria-hidden="true">{movie_poster(movie)}</a>'
+        f'<div class="card-body"><h3><a href="/movies/{slug}">{escape(movie["title"])}</a>{year}</h3>{credits}<p class="summary">{escape(summary)}</p></div>'
+        f'</article>'
+    )
 
 
 def movie_grid(movies) -> str:
     cards = "".join(movie_card(movie) for movie in movies)
     return f'<div class="grid">{cards}</div>' if cards else '<div class="empty"><h2>No movies found</h2><p>Try another search or check back after the next inventory update.</p></div>'
+
+
+def movie_carousel(movies, track: str = "recent-track") -> str:
+    """Poster cards in a horizontal scroller with page-forward controls."""
+    cards = "".join(movie_card(movie) for movie in movies)
+    if not cards:
+        return '<div class="empty"><h2>No movies found</h2><p>Try another search or check back after the next inventory update.</p></div>'
+    return (
+        f'<div class="carousel-wrap"><div class="carousel" id="{escape(track)}">{cards}</div>'
+        f'<div class="carousel-nav"><button type="button" data-carousel="{escape(track)}" data-dir="prev" aria-label="Scroll backward">‹</button>'
+        f'<button type="button" data-carousel="{escape(track)}" data-dir="next" aria-label="Scroll forward">›</button></div></div>'
+    )
 
 
 def search_form(query: str = "") -> str:

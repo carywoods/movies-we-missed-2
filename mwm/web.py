@@ -25,7 +25,7 @@ from .seo import SeoMixin
 from .admin import AdminMixin
 from .db import connect, initialize
 from .enrichment import start_metadata_worker
-from .views import movie_grid, movie_poster, page, pagination, search_form
+from .views import movie_carousel, movie_grid, movie_poster, page, pagination, search_form
 
 
 @dataclass
@@ -69,6 +69,7 @@ class Application(MemberMixin, InterestMixin, CommentMixin, ScreeningMixin, Comm
             ("GET", "/genres"): self.genres,
             ("GET", "/collections"): self.collections,
             ("GET", "/static/site.css"): self.styles,
+            ("GET", "/static/site.js"): self.script,
         }
         self.routes.update(self.member_routes())
         self.routes.update(self.interest_routes())
@@ -125,7 +126,11 @@ class Application(MemberMixin, InterestMixin, CommentMixin, ScreeningMixin, Comm
 
     def styles(self, request: Request) -> Response:
         css = (__import__("pathlib").Path(__file__).parent / "static" / "site.css").read_bytes()
-        return Response(css, content_type="text/css; charset=utf-8", headers=(("Cache-Control", "public, max-age=3600"),))
+        return Response(css, content_type="text/css; charset=utf-8", headers=(("Cache-Control", "no-cache"),))
+
+    def script(self, request: Request) -> Response:
+        js = (__import__("pathlib").Path(__file__).parent / "static" / "site.js").read_bytes()
+        return Response(js, content_type="application/javascript; charset=utf-8", headers=(("Cache-Control", "no-cache"),))
 
     def home(self, request: Request) -> Response:
         db = self.db()
@@ -133,7 +138,7 @@ class Application(MemberMixin, InterestMixin, CommentMixin, ScreeningMixin, Comm
             movies = list(db.execute("SELECT * FROM movies WHERE published=1 AND adult_content=0 AND poster_url IS NOT NULL ORDER BY featured DESC, id DESC LIMIT 12"))
         finally:
             db.close()
-        content = '<section class="hero"><p>THE MOVIE CLUB FOR THE ONES THAT GOT AWAY</p><h1>There’s always another great movie.</h1><p>Explore overlooked films, follow what interests you, and meet up at the movies.</p><a class="button" href="/movies">Browse the catalog</a></section><section><h2>Recently added</h2>' + movie_grid(movies) + "</section>"
+        content = '<section class="hero"><p>THE MOVIE CLUB FOR THE ONES THAT GOT AWAY</p><h1>There’s always another great movie.</h1><p>Explore overlooked films, follow what interests you, and meet up at the movies.</p><a class="button" href="/movies">Browse the catalog</a></section><section><h2>Recently added</h2>' + movie_carousel(movies) + "</section>"
         return self.html("Home", content, canonical="/")
 
     def movies(self, request: Request) -> Response:

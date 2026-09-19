@@ -96,3 +96,34 @@ def test_home_shows_only_artwork_ready_movies(tmp_path, monkeypatch):
     text = body.decode()
     assert "Clean Title" in text
     assert "No Poster Movie" not in text
+
+
+def test_home_renders_a_carousel_with_controls(tmp_path, monkeypatch):
+    app = display_fixture(tmp_path, monkeypatch)
+    _, _, body = request(app, "/")
+    text = body.decode()
+    assert 'class="carousel"' in text
+    assert 'data-carousel="recent-track"' in text
+    assert 'data-dir="prev"' in text and 'data-dir="next"' in text
+    assert '<article class="card">' in text
+
+
+def test_cards_stack_metadata_under_the_poster(tmp_path, monkeypatch):
+    app = display_fixture(tmp_path, monkeypatch)
+    _, _, body = request(app, "/movies")
+    text = body.decode()
+    card = text[text.index('<article class="card">'):]
+    card = card[:card.index("</article>")]
+    assert card.index("poster-link") < card.index("card-body") < card.index("<h3>")
+    assert "Directed by Ada Director" in card
+    assert 'class="summary"' in card
+
+
+def test_carousel_script_is_served_and_linked(tmp_path, monkeypatch):
+    app = display_fixture(tmp_path, monkeypatch)
+    status, headers, body = request(app, "/static/site.js")
+    assert status == 200
+    assert headers["Content-Type"].startswith("application/javascript")
+    assert b"data-carousel" in body
+    _, _, page_body = request(app, "/")
+    assert b'<script src="/static/site.js" defer></script>' in page_body

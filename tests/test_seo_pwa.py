@@ -47,10 +47,11 @@ def test_manifest_icon_worker_and_offline_fallback(tmp_path, monkeypatch):
     assert request(app, "/static/icon.svg")[0] == 200
     status, _, worker = request(app, "/sw.js")
     assert status == 200
-    assert b"mwm-v2" in worker
-    assert b"const SHELL=['/offline','/static/site.css','/static/icon.svg']" in worker
+    assert b"mwm-v3" in worker
+    assert b"const SHELL=['/offline','/static/site.css','/static/site.js','/static/icon.svg']" in worker
     assert b"if(r.ok)" in worker
     assert b"caches.open(CACHE).then(c=>c.put(e.request,copy))" in worker
+    assert b"caches.match(e.request)" in worker
     assert b"const SHELL=['/'" not in worker
     status, _, offline = request(app, "/offline")
     assert status == 200 and b"offline" in offline.lower()
