@@ -34,6 +34,7 @@ class Config:
     smtp_starttls: bool
     metadata_provider: str
     metadata_api_key: str
+    metadata_worker: bool
     model_provider: str
     model_api_key: str
     trust_proxy: bool
@@ -83,6 +84,7 @@ class Config:
             smtp_starttls=_bool("SMTP_STARTTLS", True),
             metadata_provider=os.getenv("METADATA_PROVIDER", "disabled").strip().lower(),
             metadata_api_key=os.getenv("METADATA_API_KEY", ""),
+            metadata_worker=_bool("METADATA_WORKER", False),
             model_provider=os.getenv("MODEL_PROVIDER", "disabled").strip().lower(),
             model_api_key=os.getenv("MODEL_API_KEY", ""),
             trust_proxy=_bool("TRUST_PROXY", False),

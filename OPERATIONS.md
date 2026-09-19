@@ -27,7 +27,10 @@ Restore by stopping the application, retaining the current database for rollback
 
 ## Routine operation
 
-- `/admin` links to movie/classification, import review, screenings, merchandise, moderation, newsletter, sponsors, and analytics.
+- `/admin` links to movie/classification, catalog enrichment, import review, screenings, merchandise, moderation, newsletter, sponsors, and analytics.
+- Administrator access: log in at `/login` (or `/admin/login`). The account named by `ADMIN_EMAIL`/`ADMIN_PASSWORD` is ensured and its password re-applied at every boot.
 - `mwm-import movie_inventory.csv` performs an idempotent inventory refresh.
+- `mwm-enrich metadata-enqueue` queues TMDB metadata work (artwork, synopsis, credits, genres) and `mwm-enrich metadata-work --all` drains it. With `METADATA_WORKER=1` the web process runs the same loop in the background.
+- Rows held in `review` (no confident TMDB match) are retried from `/admin/enrichment`, with `--include-review`, or by adding a curated entry to `mwm/enrichment-overrides.json` keyed by `stable_id`.
 - `mwm-enrich enqueue` queues missing merchandise enrichment and `mwm-enrich work --limit 25` processes small deterministic batches.
 - `/health` is the liveness/readiness target.

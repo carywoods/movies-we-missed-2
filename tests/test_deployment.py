@@ -69,3 +69,18 @@ def test_docker_entrypoint_seeds_only_a_missing_database():
     entrypoint = Path("deploy/docker-entrypoint.sh").read_text()
     assert "COPY deploy/mwm-seed.db /app/seed/mwm.db" in dockerfile
     assert 'if [ ! -e "$database_path" ]; then' in entrypoint
+
+
+def test_metadata_worker_flag(monkeypatch):
+    monkeypatch.setenv("METADATA_WORKER", "1")
+    assert Config.from_env().metadata_worker is True
+    monkeypatch.setenv("METADATA_WORKER", "0")
+    assert Config.from_env().metadata_worker is False
+
+
+def test_metadata_worker_stays_off_without_configuration(monkeypatch):
+    from mwm.enrichment import start_metadata_worker
+
+    monkeypatch.delenv("METADATA_WORKER", raising=False)
+    monkeypatch.delenv("METADATA_API_KEY", raising=False)
+    assert start_metadata_worker(Config.from_env()) is None

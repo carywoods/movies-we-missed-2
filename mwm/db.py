@@ -52,17 +52,28 @@ def seed(conn: sqlite3.Connection, config: Config) -> None:
     )
     genres = [
         ("Action", "action", "Movies driven by momentum, danger, and physical stakes."),
+        ("Adventure", "adventure", "Journeys, quests, exploration, and discovery."),
         ("Animation", "animation", "Stories brought to life frame by frame."),
         ("Comedy", "comedy", "Movies made to be enjoyed—and argued about—together."),
+        ("Crime", "crime", "Stories centered on crime, investigation, and consequence."),
         ("Documentary", "documentary", "Nonfiction cinema and the conversations it opens."),
         ("Drama", "drama", "Character, conflict, and choices that stay with us."),
         ("Family", "family", "Movies selected for shared family viewing."),
+        ("Fantasy", "fantasy", "Mythic worlds, magic, and imaginative possibilities."),
+        ("History", "history", "Stories shaped by historical people and events."),
+        ("Horror", "horror", "Cinema built around fear, dread, and the uncanny."),
         ("Independent", "independent", "Distinctive films made beyond the usual studio paths."),
         ("International", "international", "Cinema from around the world."),
         ("Kids", "kids", "Age-appropriate movies for younger film fans."),
+        ("Music", "music", "Performances, artists, and stories driven by music."),
         ("Musical", "musical", "Stories where music carries the feeling forward."),
+        ("Mystery", "mystery", "Puzzles, secrets, and investigations."),
+        ("Romance", "romance", "Stories centered on love and relationships."),
         ("Science Fiction", "science-fiction", "Ideas, futures, worlds, and what-ifs."),
         ("Sports", "sports", "Competition, teams, athletes, and the lives around them."),
+        ("Thriller", "thriller", "Suspenseful stories driven by danger and uncertainty."),
+        ("War", "war", "Stories of armed conflict and the people affected by it."),
+        ("Western", "western", "Frontier stories and modern variations on the Western."),
     ]
     conn.executemany(
         "INSERT INTO genres(name,slug,description) VALUES (?,?,?) ON CONFLICT(slug) DO UPDATE SET description=excluded.description",

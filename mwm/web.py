@@ -9,7 +9,7 @@ from dataclasses import dataclass
 from html import escape
 from http import HTTPStatus
 from typing import Callable, Iterable
-from urllib.parse import parse_qs
+from urllib.parse import parse_qs, quote
 
 from .auth import cookie_header, create_session, ensure_admin, load_session, read_cookie
 from .config import Config
@@ -24,7 +24,8 @@ from .analytics import AnalyticsMixin
 from .seo import SeoMixin
 from .admin import AdminMixin
 from .db import connect, initialize
-from .views import movie_grid, page, pagination, search_form
+from .enrichment import start_metadata_worker
+from .views import movie_grid, movie_poster, page, pagination, search_form
 
 
 @dataclass
@@ -77,6 +78,7 @@ class Application(MemberMixin, InterestMixin, CommentMixin, ScreeningMixin, Comm
         self.routes.update(self.analytics_routes())
         self.routes.update(self.seo_routes())
         self.routes.update(self.admin_routes())
+        start_metadata_worker(config)
 
     def html(self, title: str, content: str, **kwargs) -> Response:
         return Response(page(self.config, title, content + self.sponsor_block(), **kwargs).encode(), content_type="text/html; charset=utf-8")
@@ -183,10 +185,51 @@ class Application(MemberMixin, InterestMixin, CommentMixin, ScreeningMixin, Comm
             db.close()
         year = f' <span class="meta">({movie["release_year"]})</span>' if movie["release_year"] else ""
         chips = "".join(f'<a href="/genres/{x["slug"]}">{x["name"]}</a>' for x in genres) + "".join(f'<a href="/collections/{x["slug"]}">{x["name"]}</a>' for x in collections)
+        credit_lines = "".join(
+            f'<p class="credits">{line}</p>'
+            for line in (
+                f'Directed by {escape(movie["director"])}' if movie["director"] else "",
+                f'Starring {escape(movie["cast_text"])}' if movie["cast_text"] else "",
+            )
+            if line
+        )
+        external: dict = {}
+        try:
+            parsed = json.loads(movie["external_ids_json"] or "{}")
+            if isinstance(parsed, dict):
+                external = parsed
+        except json.JSONDecodeError:
+            external = {}
+        imdb_id = str(external.get("imdb") or "")
+        link_items = []
+        if imdb_id:
+            link_items.append(f'<a href="https://www.imdb.com/title/{quote(imdb_id)}/">IMDb</a>')
+        tmdb_id = external.get("tmdb")
+        if isinstance(tmdb_id, int):
+            link_items.append(f'<a href="https://www.themoviedb.org/movie/{tmdb_id}">TMDB</a>')
+        wikidata_id = str(external.get("wikidata") or "")
+        if wikidata_id:
+            link_items.append(f'<a href="https://www.wikidata.org/wiki/{quote(wikidata_id)}">Wikidata</a>')
+        links = f'<p class="links">{" · ".join(link_items)}</p>' if link_items else ""
         follow = self.follow_control(request, "movie", movie["id"], followed) if request.member else '<p><a href="/login">Log in</a> to follow this movie.</p>'
-        content = f'<article class="detail"><p class="meta">MOVIE</p><h1>{escape(movie["title"])}{year}</h1><p>{escape(movie["synopsis"] or "A movie waiting to be rediscovered and discussed.")}</p><div class="chips">{chips}</div>{follow}</article>'
+        structured = {"@context": "https://schema.org", "@type": "Movie", "name": movie["title"], "url": f'{self.config.site_url}/movies/{slug}'}
+        if movie["poster_url"]:
+            structured["image"] = movie["poster_url"]
+        if movie["synopsis"]:
+            structured["description"] = movie["synopsis"]
+        if movie["release_year"]:
+            structured["datePublished"] = str(movie["release_year"])
+        if movie["director"]:
+            structured["director"] = {"@type": "Person", "name": movie["director"]}
+        if genres:
+            structured["genre"] = [g["name"] for g in genres]
+        if imdb_id:
+            structured["sameAs"] = f"https://www.imdb.com/title/{imdb_id}/"
+        movie_ld = json.dumps(structured, separators=(",", ":")).replace("<", "\\u003c")
+        content = f'<article class="detail movie-detail">{movie_poster(movie, css_class="detail-art")}<div class="movie-body"><p class="meta">MOVIE</p><h1>{escape(movie["title"])}{year}</h1>{credit_lines}<p>{escape(movie["synopsis"] or "A movie waiting to be rediscovered and discussed.")}</p><div class="chips">{chips}</div>{links}{follow}</div></article>'
         content += f'<p><a href="/movies/{slug}/comments">Join the discussion</a></p>' + self.commerce_panel(movie["id"])
-        return self.html(movie["title"], content, description=movie["synopsis"] or f'Discover {movie["title"]} at Movies We Missed.', canonical=f'/movies/{slug}')
+        content += f'<script type="application/ld+json">{movie_ld}</script>'
+        return self.html(movie["title"], content, description=movie["synopsis"] or f'Discover {movie["title"]} at Movies We Missed.', canonical=f'/movies/{slug}', image=movie["poster_url"])
 
     def taxonomy_detail(self, request: Request, table: str, join_table: str, foreign_key: str, path: str, slug: str) -> Response:
         db = self.db()

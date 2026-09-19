@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from .mixins import AppMixin
+from .mixins import AppMixin, safe_redirect_target
 
 import hmac
 import secrets
@@ -70,6 +70,9 @@ class MemberMixin(AppMixin):
 
     def login_form(self, request):
         fields = '<label>Email<input name="email" required type="email" autocomplete="email"></label><label>Password<input name="password" required type="password" autocomplete="current-password"></label><p><a href="/forgot-password">Forgot password?</a></p>'
+        target = safe_redirect_target(request.query.get("next", [""])[0], "")
+        if target:
+            fields += f'<input type="hidden" name="next" value="{escape(target, quote=True)}">'
         return self.form_page(request, "Log in", fields, "/login")
 
     def login(self, request):
@@ -90,7 +93,7 @@ class MemberMixin(AppMixin):
         self.clear_auth_failures(request)
         destroy_session(self.config, request.session_token)
         token, _ = create_session(self.config, member["id"])
-        return self.redirect("/profile", (cookie_header(self.config, token),))
+        return self.redirect(safe_redirect_target(request.form.get("next"), "/profile"), (cookie_header(self.config, token),))
 
     def forgot_password_form(self, request):
         fields = '<label>Email<input name="email" required type="email" autocomplete="email"></label>'

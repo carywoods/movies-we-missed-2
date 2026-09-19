@@ -4,14 +4,18 @@ from .mixins import AppMixin
 
 import re
 from html import escape
-from urllib.parse import urlparse
+from urllib.parse import quote, urlparse
 
 
 class AdminMixin(AppMixin):
     def admin_routes(self):
         return {
             ("GET", "/admin"): self.admin_dashboard,
+            ("GET", "/admin/login"): self.admin_login,
             ("GET", "/admin/movies"): self.admin_movies,
+            ("GET", "/admin/enrichment"): self.admin_enrichment,
+            ("POST", "/admin/enrichment/run"): self.admin_enrichment_run,
+            ("POST", "/admin/enrichment/retry-review"): self.admin_enrichment_retry_review,
             ("GET", "/admin/import-review"): self.admin_import_review,
             ("GET", "/admin/merchandise"): self.admin_merchandise,
             ("POST", "/admin/merchandise"): self.save_merchandise,
@@ -34,13 +38,19 @@ class AdminMixin(AppMixin):
         if self._operator(request):
             return None
         from .web import Response
+        if not request.member:
+            # Send anonymous visitors to the login form and straight back here.
+            return self.redirect(f"/login?next={quote(request.path, safe='/')}")
         return Response(b"Forbidden", 403)
+
+    def admin_login(self, request):
+        return self.redirect("/login?next=/admin")
 
     def admin_dashboard(self, request):
         denied = self._require_operator(request)
         if denied:
             return denied
-        sections = (("Movies & classification", "/admin/movies"), ("Import review", "/admin/import-review"), ("Screenings", "/admin/screenings"), ("Merchandise", "/admin/merchandise"), ("Comments", "/admin/comments"), ("Newsletter", "/admin/newsletter"), ("Sponsors", "/admin/sponsors"), ("Analytics", "/admin/analytics"))
+        sections = (("Movies & classification", "/admin/movies"), ("Catalog enrichment", "/admin/enrichment"), ("Import review", "/admin/import-review"), ("Screenings", "/admin/screenings"), ("Merchandise", "/admin/merchandise"), ("Comments", "/admin/comments"), ("Newsletter", "/admin/newsletter"), ("Sponsors", "/admin/sponsors"), ("Analytics", "/admin/analytics"))
         cards = "".join(f'<article class="card"><div><h2><a href="{path}">{label}</a></h2></div></article>' for label, path in sections)
         return self.html("Operations", f'<h1>Operations</h1><div class="grid">{cards}</div>', canonical="/admin")
 
@@ -54,8 +64,8 @@ class AdminMixin(AppMixin):
             movies = list(db.execute("SELECT * FROM movies WHERE title LIKE ? ORDER BY title LIMIT 200", (f"%{query}%",)))
         finally:
             db.close()
-        rows = "".join(f'<tr><td><a href="/admin/movies/{m["id"]}/edit">{escape(m["title"])}</a></td><td>{m["release_year"] or ""}</td><td>{"public" if m["published"] else "hidden"}</td><td>{m["parsing_confidence"]}</td></tr>' for m in movies)
-        return self.html("Manage movies", f'<h1>Movies</h1><form class="search"><input name="q" value="{escape(query)}"><button>Search</button></form><table><tr><th>Title</th><th>Year</th><th>Visibility</th><th>Parse</th></tr>{rows}</table>', canonical="/admin/movies")
+        rows = "".join(f'<tr><td><a href="/admin/movies/{m["id"]}/edit">{escape(m["title"])}</a></td><td>{m["release_year"] or ""}</td><td>{"public" if m["published"] else "hidden"}</td><td>{m["parsing_confidence"]}</td><td>{escape(str(m["enrichment_state"]))}</td><td>{"yes" if m["poster_url"] else ""}</td></tr>' for m in movies)
+        return self.html("Manage movies", f'<h1>Movies</h1><form class="search"><input name="q" value="{escape(query)}"><button>Search</button></form><table><tr><th>Title</th><th>Year</th><th>Visibility</th><th>Parse</th><th>Enrichment</th><th>Artwork</th></tr>{rows}</table>', canonical="/admin/movies")
 
     def admin_movie_form(self, request, movie_id: int):
         denied = self._require_operator(request)
@@ -73,7 +83,7 @@ class AdminMixin(AppMixin):
             db.close()
         genre_fields = "".join(f'<label class="check"><input type="checkbox" name="genre_{g["id"]}" value="1"{" checked" if g["selected"] else ""}>{escape(g["name"])}</label>' for g in genres)
         collection_fields = "".join(f'<label class="check"><input type="checkbox" name="collection_{c["id"]}" value="1"{" checked" if c["selected"] else ""}>{escape(c["name"])}</label>' for c in collections)
-        fields = f'<label>Title<input name="title" value="{escape(movie["title"])}" required></label><label>Year<input name="release_year" type="number" value="{movie["release_year"] or ""}"></label><label>Synopsis<textarea name="synopsis">{escape(movie["synopsis"] or "")}</textarea></label><label class="check"><input type="checkbox" name="published" value="1"{" checked" if movie["published"] else ""}> Public</label><label class="check"><input type="checkbox" name="featured" value="1"{" checked" if movie["featured"] else ""}> Featured</label><fieldset><legend>Genres</legend>{genre_fields}</fieldset><fieldset><legend>Collections</legend>{collection_fields}</fieldset>'
+        fields = f'<label>Title<input name="title" value="{escape(movie["title"])}" required></label><label>Year<input name="release_year" type="number" value="{movie["release_year"] or ""}"></label><label>Synopsis<textarea name="synopsis">{escape(movie["synopsis"] or "")}</textarea></label><label>Poster URL<input name="poster_url" type="url" value="{escape(movie["poster_url"] or "")}" placeholder="https://image.tmdb.org/..."></label><label>Director<input name="director" value="{escape(movie["director"] or "")}"></label><label>Cast<textarea name="cast_text">{escape(movie["cast_text"] or "")}</textarea></label><label class="check"><input type="checkbox" name="published" value="1"{" checked" if movie["published"] else ""}> Public</label><label class="check"><input type="checkbox" name="featured" value="1"{" checked" if movie["featured"] else ""}> Featured</label><fieldset><legend>Genres</legend>{genre_fields}</fieldset><fieldset><legend>Collections</legend>{collection_fields}</fieldset>'
         return self.form_page(request, "Edit movie", fields, f"/admin/movies/{movie_id}/edit")
 
     def save_admin_movie(self, request, movie_id: int):
@@ -90,9 +100,12 @@ class AdminMixin(AppMixin):
             return Response(b"Invalid year", 400)
         if not title or (year and not 1888 <= year <= 2100):
             return Response(b"Invalid title or year", 400)
+        poster_url = request.form.get("poster_url", "").strip()[:500]
+        if poster_url and urlparse(poster_url).scheme not in {"http", "https"}:
+            return Response(b"Poster URL must be an http(s) URL", 400)
         db = self.db()
         try:
-            db.execute("UPDATE movies SET title=?,release_year=?,synopsis=?,published=?,featured=?,updated_at=CURRENT_TIMESTAMP WHERE id=?", (title, year, request.form.get("synopsis", "").strip()[:5000], int(request.form.get("published") == "1"), int(request.form.get("featured") == "1"), movie_id))
+            db.execute("UPDATE movies SET title=?,release_year=?,synopsis=?,poster_url=?,director=?,cast_text=?,published=?,featured=?,updated_at=CURRENT_TIMESTAMP WHERE id=?", (title, year, request.form.get("synopsis", "").strip()[:5000], poster_url or None, request.form.get("director", "").strip()[:300] or None, request.form.get("cast_text", "").strip()[:1000] or None, int(request.form.get("published") == "1"), int(request.form.get("featured") == "1"), movie_id))
             genre_ids = {row[0] for row in db.execute("SELECT id FROM genres")}
             collection_ids = {row[0] for row in db.execute("SELECT id FROM collections")}
             db.execute("DELETE FROM movie_genres WHERE movie_id=? AND source='editorial'", (movie_id,))
@@ -188,3 +201,92 @@ class AdminMixin(AppMixin):
         finally:
             db.close()
         return self.redirect("/admin/sponsors")
+
+    def admin_enrichment(self, request):
+        denied = self._require_operator(request)
+        if denied:
+            return denied
+        db = self.db()
+        try:
+            states = list(db.execute("SELECT enrichment_state,count(*) FROM movies WHERE published=1 GROUP BY enrichment_state ORDER BY enrichment_state"))
+            artwork = db.execute("SELECT count(*) FROM movies WHERE published=1 AND poster_url IS NOT NULL").fetchone()[0]
+            total = db.execute("SELECT count(*) FROM movies WHERE published=1").fetchone()[0]
+            jobs = list(db.execute("SELECT * FROM jobs WHERE job_type='movie_metadata' ORDER BY id DESC LIMIT 12"))
+            reviews = list(db.execute("SELECT title,stable_id FROM movies WHERE enrichment_state='review' ORDER BY title LIMIT 300"))
+        finally:
+            db.close()
+        notice = ""
+        if request.query.get("ran", [""])[0]:
+            notice = f'<p class="notice">Processed {escape(request.query["ran"][0])} job(s): {escape(request.query.get("matched", ["0"])[0])} matched, {escape(request.query.get("review", ["0"])[0])} held for review.</p>'
+        elif request.query.get("requeued", [""])[0]:
+            notice = f'<p class="notice">Re-queued {escape(request.query["requeued"][0])} review row(s). Run a batch to retry them.</p>'
+        elif request.query.get("error", [""])[0]:
+            notice = f'<p class="notice">{escape(request.query["error"][0])}</p>'
+        provider_ready = self.config.metadata_provider == "tmdb" and bool(self.config.metadata_api_key)
+        provider_line = f"Metadata provider: {escape(self.config.metadata_provider)}. Background worker: {'on' if self.config.metadata_worker else 'off'}."
+        if not provider_ready:
+            provider_line += " Set METADATA_PROVIDER=tmdb and METADATA_API_KEY to enable matching."
+        state_rows = "".join(f'<tr><td>{escape(str(state))}</td><td>{count}</td></tr>' for state, count in states)
+        job_rows = "".join(f'<tr><td>{job["id"]}</td><td>{escape(str(job["status"]))}</td><td>{job["confidence"] if job["confidence"] is not None else ""}</td><td>{escape(str(job["last_error"] or ""))}</td></tr>' for job in jobs)
+        review_items = "".join(f'<li>{escape(movie["title"])} <span class="meta">{escape(str(movie["stable_id"]))}</span></li>' for movie in reviews) or "<li>Nothing waiting for review.</li>"
+        csrf = request.session["csrf_token"]
+        run_form = f'<form class="stack" method="post" action="/admin/enrichment/run"><input type="hidden" name="csrf" value="{csrf}"><label>Batch size<input name="limit" type="number" value="10" min="1" max="50"></label><button>Run enrichment batch</button></form>'
+        retry_form = f'<form method="post" action="/admin/enrichment/retry-review"><input type="hidden" name="csrf" value="{csrf}"><button>Re-queue review rows</button></form>'
+        content = (
+            f'<h1>Catalog enrichment</h1>{notice}<p>{provider_line}</p><p>{artwork} of {total} published movies have artwork.</p>'
+            f'<h2>States</h2><table><tr><th>State</th><th>Movies</th></tr>{state_rows}</table>'
+            f'<h2>Run a batch</h2>{run_form}'
+            f'<h2>Review queue</h2>{retry_form}<ul>{review_items}</ul>'
+            f'<h2>Recent jobs</h2><table><tr><th>#</th><th>Status</th><th>Confidence</th><th>Last error</th></tr>{job_rows}</table>'
+        )
+        return self.html("Catalog enrichment", content, canonical="/admin/enrichment")
+
+    def admin_enrichment_run(self, request):
+        denied = self._require_operator(request)
+        if denied:
+            return denied
+        from .web import Response
+        from .enrichment import _metadata_client, enqueue_metadata, work_metadata_one
+        if not self.valid_csrf(request):
+            return Response(b"Invalid CSRF token", 403)
+        try:
+            limit = max(1, min(50, int(request.form.get("limit", "10"))))
+        except ValueError:
+            limit = 10
+        try:
+            client = _metadata_client(self.config)
+        except RuntimeError as exc:
+            return self.redirect(f"/admin/enrichment?error={quote(str(exc))}")
+        db = self.db()
+        try:
+            last_job_id = db.execute("SELECT COALESCE(MAX(id),0) FROM jobs WHERE job_type='movie_metadata'").fetchone()[0]
+        finally:
+            db.close()
+        enqueue_metadata(self.config)
+        processed = 0
+        for _ in range(limit):
+            if not work_metadata_one(self.config, client):
+                break
+            processed += 1
+        db = self.db()
+        try:
+            outcomes = dict(db.execute("SELECT status,count(*) FROM jobs WHERE job_type='movie_metadata' AND id>? GROUP BY status", (last_job_id,)))
+        finally:
+            db.close()
+        matched = outcomes.get("complete", 0)
+        review = outcomes.get("review", 0)
+        return self.redirect(f"/admin/enrichment?ran={processed}&matched={matched}&review={review}")
+
+    def admin_enrichment_retry_review(self, request):
+        denied = self._require_operator(request)
+        if denied:
+            return denied
+        from .web import Response
+        from .enrichment import enqueue_metadata
+        if not self.valid_csrf(request):
+            return Response(b"Invalid CSRF token", 403)
+        try:
+            queued = enqueue_metadata(self.config, include_review=True)
+        except RuntimeError as exc:
+            return self.redirect(f"/admin/enrichment?error={quote(str(exc))}")
+        return self.redirect(f"/admin/enrichment?requeued={queued}")

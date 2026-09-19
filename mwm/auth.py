@@ -101,7 +101,8 @@ def ensure_admin(config: Config) -> None:
     db = connect(config.database_path)
     try:
         db.execute(
-            "INSERT INTO members(email,password_hash,display_name,role,email_verified_at) VALUES (?,?,?,?,CURRENT_TIMESTAMP) ON CONFLICT(email) DO NOTHING",
+            "INSERT INTO members(email,password_hash,display_name,role,email_verified_at) VALUES (?,?,?,?,CURRENT_TIMESTAMP) "
+            "ON CONFLICT(email) DO UPDATE SET password_hash=excluded.password_hash, role='admin', status='active', updated_at=CURRENT_TIMESTAMP",
             (config.admin_email, hash_password(config.admin_password), "Administrator", "admin"),
         )
     finally:

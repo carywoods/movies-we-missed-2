@@ -1,7 +1,7 @@
 # Project Status
 
 First-run definition of done: **implemented and verified**.
-Last verified 2026-09-18: 56 tests, clean type/compile checks, isolated wheel install, production health check, local database migration/integrity verification, and seeded Docker volume persistence.
+Last verified 2026-09-19: 84 tests, clean type/compile checks, isolated wheel install, production health check, local database migration/integrity verification, seeded Docker volume persistence, and an enriched 1,122-title catalog (1,045 matched from TMDB).
 
 
 | Area | Status | Evidence |
@@ -19,5 +19,6 @@ Last verified 2026-09-18: 56 tests, clean type/compile checks, isolated wheel in
 | SEO/PWA | Complete | Metadata, sitemap, manifest, worker, offline |
 | Admin/operations | Complete | Unified dashboard, backups, persistence docs |
 | Coolify | Complete | Sanitized 1,122-title seed, Docker/env/volume contract, health and redeploy-persistence checks |
+| Catalog enrichment | Complete | 1,045 of 1,122 titles matched from TMDB with artwork, synopsis, director, cast, genres; 77 held in review; curated overrides; worker, CLI, and admin console |
 
-External enrichment and outbound email remain intentionally disabled until optional providers are configured. Core behavior does not depend on them.
+Outbound email remains intentionally disabled until SMTP is configured. Catalog enrichment is implemented and dormant until `METADATA_API_KEY` is set; core behavior does not depend on either.

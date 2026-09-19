@@ -15,7 +15,7 @@ def test_migrations_and_seed_are_idempotent(tmp_path: Path, monkeypatch) -> None
     connection = connect(database)
     try:
         assert connection.execute("PRAGMA integrity_check").fetchone()[0] == "ok"
-        assert connection.execute("SELECT count(*) FROM genres").fetchone()[0] == 12
+        assert connection.execute("SELECT count(*) FROM genres").fetchone()[0] == 23
         assert connection.execute("SELECT adult_only FROM collections WHERE slug='erotica'").fetchone()[0] == 0
         assert connection.execute("SELECT count(*) FROM collections WHERE slug='lgbq-stories'").fetchone()[0] == 1
         assert connection.execute("SELECT count(*) FROM sponsors").fetchone()[0] == 1

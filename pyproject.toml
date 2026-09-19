@@ -26,7 +26,7 @@ packages = ["mwm"]
 include-package-data = true
 
 [tool.setuptools.package-data]
-mwm = ["static/*", "migrations/*.sql"]
+mwm = ["static/*", "migrations/*.sql", "enrichment-overrides.json"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
