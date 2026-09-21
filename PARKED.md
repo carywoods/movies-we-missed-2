@@ -1,16 +1,17 @@
 # Parked Handoff
 
-Application work parked on 2026-09-19 after `82c2c09`; catalog enrichment (TMDB artwork, metadata, clean titles) landed on `main` the same day — see `DEPLOYMENT.md` § Catalog metadata.
+Application work parked on 2026-09-19 after `82c2c09`. Catalog enrichment (TMDB artwork, metadata, clean titles) and the catalog display work (poster-on-top cards, home carousel, uncropped posters, service-worker refresh) landed on `main` the same day — see `DEPLOYMENT.md` for the deploy contract.
 
 ## Verified state
 
-- 84 tests pass.
+- 89 tests pass.
 - Mypy passes across 23 source files.
 - The Docker image builds and starts in production mode.
 - A fresh Docker volume is seeded with 1,122 enriched catalog titles (1,045 matched from TMDB).
 - `/health` and `/movies` respond successfully.
 - Administrator bootstrap works through `ADMIN_EMAIL` and `ADMIN_PASSWORD`, and the configured password is re-applied on every boot.
 - A second container preserves changes made to the first container's volume.
+- Cards show posters whole (uncropped) with the metadata below, and the home page carries a carousel with prev/next controls (`main @ 3385a26`).
 
 ## Data and taxonomy
 
@@ -30,7 +31,7 @@ Application work parked on 2026-09-19 after `82c2c09`; catalog enrichment (TMDB 
 5. Expose port 8080 and configure `/health` as the health check.
 6. Deploy and verify `/`, `/movies`, `/collections`, `/admin`, and `/health`.
 
-The entrypoint copies the sanitized catalog seed only when the database file does not exist. It never overwrites an existing persistent database. If an older test resource already has an empty database, remove only that test resource's volume after confirming it contains nothing needed, then redeploy.
+The entrypoint copies the sanitized catalog seed only when the database file does not exist. `FORCE_SEED=1` for one boot replaces an existing or empty database with the bundled enriched catalog (remove the flag afterwards — while set, every boot overwrites). Otherwise the entrypoint never overwrites an existing persistent database. If an older test resource already has an empty database, remove only that test resource's volume after confirming it contains nothing needed, then redeploy.
 
 ## Remaining state
 
